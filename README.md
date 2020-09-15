@@ -1,3 +1,4 @@
 # MPISS
- **Megapolis infection spread simulation**
-- The Diploma work. 
+**Репозиторий дипломной работы**
+
+*Симулятор распространения инфекции в мегаполисе*
