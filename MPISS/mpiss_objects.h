@@ -7,6 +7,7 @@
 #include "matrix.h"
 
 #include <list>
+#include <iostream>
 #include <vector>
 #include <random>
 #include <cmath>
@@ -31,7 +32,7 @@ namespace mpiss {
 		return rval;
 	}
 	double erand() {
-		return __utils::__gr.gen();
+		return __utils::__gr.gen()/(double(0xFFFFFFFFu));
 	}
 
 	enum class age_type {
@@ -65,7 +66,7 @@ namespace mpiss {
 	struct disease_progress_line {
 		std::vector<std::pair<mpiss::disease_state, __prob_line>> data;
 		disease_progress_line(const std::vector<std::pair<mpiss::disease_state, __prob_line>>& d = std::vector<std::pair<mpiss::disease_state, __prob_line>>()): data(d){}
-		mpiss::disease_state update_disease_state(const size_t& time_since_contact, const float& val) const {
+		mpiss::disease_state update_disease_state(const int64_t& time_since_contact, const float& val) const {
 			if (val == neg_inf)
 				return mpiss::disease_state::dead;
 			mpiss::disease_state prev_state = mpiss::disease_state::healthy;
@@ -75,13 +76,14 @@ namespace mpiss {
 					return prev_state;
 				prev_state = pr.first;
 			}
+			return prev_state;
 		}
 	};
 
 	struct aged_disease_progress_line {
 		std::vector<disease_progress_line> data;
 		aged_disease_progress_line(const std::vector<disease_progress_line>& d = std::vector<disease_progress_line>()):data(d){}
-		mpiss::disease_state update_disease_state(mpiss::age_type age_t, const size_t& time_since_contact, const float& val) const {
+		mpiss::disease_state update_disease_state(mpiss::age_type age_t, const int64_t& time_since_contact, const float& val) const {
 			return data[(size_t)age_t].update_disease_state(time_since_contact, val);
 		}
 	};
@@ -129,7 +131,7 @@ namespace mpiss {
 		cemetery* closest_cemetery;
 		std::vector<cell*> cells;
 		std::vector<size_t> _buffer_list;
-		size_t cur_ill_count;
+		size_t counters[state_enum_size];
 		room(
 			double* contact_probability, 
 			sq_matrix<age_enum_size>* spread_matrix_ptr, 
@@ -138,12 +140,12 @@ namespace mpiss {
 		) : contact_probability(contact_probability ), 
 			spread_matrix_ptr(spread_matrix_ptr),
 			state_spread_modifier(state_spread_modifier), 
-			closest_cemetery(closest_cemetery),
-			cur_ill_count(0)
-		{  }
+			closest_cemetery(closest_cemetery)
+		{
+		}
 		void make_iteration() {
 			auto it = cells.begin(); 
-			cur_ill_count = 0;
+			clear_counters();
 			for (; it != cells.end(); it++) {
 				(*it)->make_iteration();
 				double rnd = erand();
@@ -155,12 +157,20 @@ namespace mpiss {
 				if ((*it)->cur_disease_state == disease_state::dead) 
 					_buffer_list.push_back(it - cells.begin());
 
-				if ((*it)->cur_disease_state > disease_state::healthy && (*it)->cur_disease_state < disease_state::immune)
-					cur_ill_count++;
+				counters[(size_t)(*it)->cur_disease_state]++;
 			}
-			for (auto entry : _buffer_list) 
-				closest_cemetery->take_from(cells, entry);
+			for (auto entry_rit = _buffer_list.rbegin(); entry_rit != _buffer_list.rend(); entry_rit++)
+				closest_cemetery->take_from(cells, *entry_rit);
 			_buffer_list.clear();
+		}
+		void clear_counters() {
+			for (int i = 0; i < state_enum_size; i++) {
+				counters[i] = 0;
+			}
+		}
+		void print_counters(std::ostream& out) const {
+			for (int i = 0; i < state_enum_size; i++) 
+				out << magic_enum::enum_name<disease_state>((disease_state)i) << ": " << counters[i] << std::endl;
 		}
 		void single_contact(std::vector<cell*>::iterator a_cell_id, std::vector<cell*>::iterator b_cell_id) {
 			if ((bool)(*a_cell_id)->cur_disease_state || (bool)(*b_cell_id)->cur_disease_state) {

@@ -11,56 +11,37 @@
 int main() {
 	auto cem = new mpiss::cemetery();
 	auto prob = new double(0.03);
+	auto vec = std::vector<std::pair<mpiss::disease_state, mpiss::__prob_line>>{
+				line_entry(mpiss::disease_state::hidden_nonspreading, 0.5, 0),
+				line_entry(mpiss::disease_state::hidden_spreading, 100, 150),
+				line_entry(mpiss::disease_state::active_spread, 200, 300),
+				line_entry(mpiss::disease_state::dead, 100, 400),
+				line_entry(mpiss::disease_state::immune, 99.75, 400),
+				line_entry(mpiss::disease_state::healthy, 600, 1000),
+	};
 	auto adpl = new mpiss::aged_disease_progress_line{
-		std::vector<mpiss::disease_progress_line>{
-			std::vector<std::pair<mpiss::disease_state, mpiss::__prob_line>>{
-				line_entry(mpiss::disease_state::hidden_nonspreading, 50, 100),
-				line_entry(mpiss::disease_state::hidden_spreading, 100, 150),
-				line_entry(mpiss::disease_state::active_spread, 200, 300),
-				line_entry(mpiss::disease_state::dead, 300, 400),
-				line_entry(mpiss::disease_state::immune, 315, 400),
-				line_entry(mpiss::disease_state::healthy, 600, 1000),
-			},std::vector<std::pair<mpiss::disease_state, mpiss::__prob_line>>{
-				line_entry(mpiss::disease_state::hidden_nonspreading, 50, 100),
-				line_entry(mpiss::disease_state::hidden_spreading, 100, 150),
-				line_entry(mpiss::disease_state::active_spread, 200, 300),
-				line_entry(mpiss::disease_state::dead, 300, 400),
-				line_entry(mpiss::disease_state::immune, 315, 400),
-				line_entry(mpiss::disease_state::healthy, 600, 1000),
-			},std::vector<std::pair<mpiss::disease_state, mpiss::__prob_line>>{
-				line_entry(mpiss::disease_state::hidden_nonspreading, 50, 100),
-				line_entry(mpiss::disease_state::hidden_spreading, 100, 150),
-				line_entry(mpiss::disease_state::active_spread, 200, 300),
-				line_entry(mpiss::disease_state::dead, 300, 400),
-				line_entry(mpiss::disease_state::immune, 315, 400),
-				line_entry(mpiss::disease_state::healthy, 600, 1000),
-			},std::vector<std::pair<mpiss::disease_state, mpiss::__prob_line>>{
-				line_entry(mpiss::disease_state::hidden_nonspreading, 50, 100),
-				line_entry(mpiss::disease_state::hidden_spreading, 100, 150),
-				line_entry(mpiss::disease_state::active_spread, 200, 300),
-				line_entry(mpiss::disease_state::dead, 300, 400),
-				line_entry(mpiss::disease_state::immune, 315, 400),
-				line_entry(mpiss::disease_state::healthy, 600, 1000),
-			}
-		}
+		std::vector<mpiss::disease_progress_line>(4,vec)
 	};
 
-	auto state_spread_modifier = new point<mpiss::state_enum_size>{ 0.,0.01,0.2,0.9,0.000000001,0.1 };
+	auto state_spread_modifier = new point<mpiss::state_enum_size>{ 0.,0.1,0.7,0.9,0.000000001,0.1 };
 	auto spread_matrix = new sq_matrix<mpiss::age_enum_size>{
-		{0.1,0.1,0.1,0.1},
-		{0.1,0.1,0.1,0.1},
-		{0.1,0.1,0.1,0.1},
-		{0.1,0.1,0.1,0.1}
+		{0.9,0.9,0.9,0.9},
+		{0.9,0.9,0.9,0.9},
+		{0.9,0.9,0.9,0.9},
+		{0.9,0.9,0.9,0.9}
 	};
 	auto percent = new double(0.03);
 
 	mpiss::room r(percent,spread_matrix, state_spread_modifier,cem);
-	for (int i = 0; i < 10000; i++) {
+	for (int i = 0; i < 500000; i++) {
 		r.cells.push_back(new mpiss::cell(adpl));
 	}
-	r.cells.back()->cur_disease_state = mpiss::disease_state::hidden_nonspreading;
+	r.cells[65488]->cur_disease_state = mpiss::disease_state::hidden_nonspreading;
+	size_t cnt = 0;
 	while (true) {
 		r.make_iteration();
-		std::cout << r.cells.size() << " " << cem->deads.size() << " " << r.cur_ill_count << std::endl;
+		std::cout << cnt << ": " << r.cells.size() << " " << cem->deads.size() << std::endl;
+		r.print_counters(std::cout);
+ 		cnt++;
 	}
 }
