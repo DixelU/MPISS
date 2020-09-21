@@ -159,7 +159,12 @@
     <ClCompile Include="MPISS.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="mpiss_objects.h" />
+    <ClInclude Include="mpiss_cell.h" />
+    <ClInclude Include="mpiss_cemetery.h" />
+    <ClInclude Include="mpiss_disease_progress_line.h" />
+    <ClInclude Include="mpiss_header.h" />
+    <ClInclude Include="mpiss_room.h" />
+    <ClInclude Include="probabiliy_disease_progress.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
