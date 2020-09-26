@@ -7,7 +7,7 @@
 
 #define line_entry(__t,__s,__o) std::pair<mpiss::disease_state, mpiss::__prob_line>(__t, mpiss::__prob_line{__s,__o})
 
-//#define PROB_BASED 
+#define PROB_BASED 
 
 int main() {
 	std::ios_base::sync_with_stdio(false); 
@@ -19,7 +19,7 @@ int main() {
 	fout.rdbuf()->pubsetbuf(buf, bufsize);
 
 	auto cem = new mpiss::cemetery();
-	constexpr size_t N = 50000;
+	constexpr size_t N = 5000;
 
 #ifndef PROB_BASED
 	auto vec = std::vector<std::pair<mpiss::disease_state, mpiss::__prob_line>>{
@@ -56,20 +56,22 @@ int main() {
 	auto dp = new mpiss::probability_disease_progress(
 		std::vector<decltype(vec)>(mpiss::age_enum_size, vec)
 	);
-	auto state_spread_modifier = new point<mpiss::state_enum_size>{ 0.0, 1.0, 1.0, 1.0, 0., 0. };
+	auto state_spread_modifier = new point<mpiss::state_enum_size>{ 0.0, 1., 1., 1., 1., 0. };
 	auto spread_matrix = new sq_matrix<mpiss::age_enum_size>{
 		{1.0,0.0,0.0,0.0},
 		{0.0,1.0,0.0,0.0},
 		{0.0,0.0,1.0,0.0},
 		{0.0,0.0,0.0,1.0}
 	};
-	auto percent = new double(0.1);
+	auto contact_prob = new double(0.1);
 #endif
 
-	mpiss::room r(percent, spread_matrix, state_spread_modifier, cem);
+	mpiss::room r(contact_prob, spread_matrix, state_spread_modifier, cem);
 	for (int i = 0; i < N; i++) 
 		r.cells.push_back(new mpiss::cell(dp));
 	
+	/*for (int i = 0; i < N; i++)
+		r.cells[i]->next_disease_state = mpiss::disease_state::hidden_nonspreading;*/
 	r.cells[N / 10]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
 	r.cells[N / 5]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
 	r.cells[N / 2]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
@@ -78,9 +80,11 @@ int main() {
 	std::string temp = "";
 	const std::string delim = ";";
 
-	constexpr size_t iterations_count = 8000, cycle_count = 50;
+	constexpr size_t iterations_count = 200, cycle_count = 1000;
 	std::vector<std::tuple<double, double, double, double>> count1(iterations_count, std::tuple<double, double, double, double>(0,0,0,0));
 	std::vector<std::tuple<double, double, double, double>> count2(iterations_count, std::tuple<double, double, double, double>(0,0,0,0));
+
+	std::vector<decltype(count1)> output(cycle_count, count1);
 
 	for (size_t i = 0; i < cycle_count; i++) {
 		for (size_t c = 0; c < iterations_count; c++) {
@@ -89,6 +93,8 @@ int main() {
 			std::get<1>(count2[c]) += std::pow(r.get_sick_count(),2);
 			std::get<2>(count2[c]) += std::pow(r.counters[(size_t)mpiss::disease_state::immune],2);
 			std::get<3>(count2[c]) += std::pow(cem->deads.size(),2);
+
+			std::get<1>(output[i][c]) = r.get_sick_count();
 
 			std::get<0>(count1[c]) += r.counters[(size_t)mpiss::disease_state::healthy];
 			std::get<1>(count1[c]) += r.get_sick_count();
@@ -101,18 +107,20 @@ int main() {
 		//std::cout << "Deads reset" << std::endl;
 		for (auto& t : r.cells) {
 			t->time_since_contact = -1;
+			t->value = mpiss::erand();
 			t->cur_disease_state = t->next_disease_state = mpiss::disease_state::healthy;
 		}
 
+		/*for (int i = 0; i < N; i++)
+			r.cells[i]->next_disease_state = mpiss::disease_state::hidden_nonspreading;*/
 		r.cells[N / 10]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
 		r.cells[N / 5]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
 		r.cells[N / 2]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
-
 		cem->deads.clear();
 		std::cout << "Loop " << i << std::endl;
 	}
 	for (size_t c = 0; c < iterations_count; c++) {
-		temp +=
+		/*temp +=
 			std::to_string(c) + delim +
 			std::to_string((size_t)std::get<0>(count1[c]) / (cycle_count)) + delim +
 			std::to_string((size_t)std::sqrt(((std::get<0>(count2[c]) / (cycle_count)) - std::pow(std::get<0>(count1[c]) / (cycle_count), 2)))) + delim +
@@ -121,7 +129,48 @@ int main() {
 			std::to_string((size_t)std::get<2>(count1[c]) / (cycle_count)) + delim +
 			std::to_string((size_t)std::sqrt(((std::get<2>(count2[c]) / (cycle_count)) - std::pow(std::get<2>(count1[c]) / (cycle_count), 2)))) + delim +
 			std::to_string((size_t)std::get<3>(count1[c]) / (cycle_count)) + delim +
-			std::to_string((size_t)std::sqrt(((std::get<3>(count2[c]) / (cycle_count)) - std::pow(std::get<3>(count1[c]) / (cycle_count), 2)))) + "\n";
+			std::to_string((size_t)std::sqrt(((std::get<3>(count2[c]) / (cycle_count)) - std::pow(std::get<3>(count1[c]) / (cycle_count), 2)))) + "\n";*/
+
+		/*temp +=
+			std::to_string(c) + delim +
+			std::to_string((int64_t)std::get<0>(count1[c]) / (cycle_count)) + delim +
+
+			std::to_string(
+				(int64_t)(std::get<0>(count1[c]) / (cycle_count)+2 * std::sqrt((std::get<0>(count2[c]) / (cycle_count)) - std::pow(std::get<0>(count1[c]) / (cycle_count), 2)))
+			) + delim +
+			std::to_string(
+				(int64_t)(std::get<0>(count1[c]) / (cycle_count)-2 * std::sqrt((std::get<0>(count2[c]) / (cycle_count)) - std::pow(std::get<0>(count1[c]) / (cycle_count), 2)))
+			) + delim +
+
+			std::to_string((int64_t)std::get<1>(count1[c]) / (cycle_count)) + delim +
+
+			std::to_string(
+				(int64_t)(std::get<1>(count1[c]) / (cycle_count)+2 * std::sqrt((std::get<1>(count2[c]) / (cycle_count)) - std::pow(std::get<1>(count1[c]) / (cycle_count), 2)))
+			) + delim +
+			std::to_string(
+				(int64_t)(std::get<1>(count1[c]) / (cycle_count)-2 * std::sqrt((std::get<1>(count2[c]) / (cycle_count)) - std::pow(std::get<1>(count1[c]) / (cycle_count), 2)))
+			) + delim +
+
+			std::to_string((int64_t)std::get<2>(count1[c]) / (cycle_count)) + delim +
+
+			std::to_string(
+				(int64_t)(std::get<2>(count1[c]) / (cycle_count)+2 * std::sqrt((std::get<2>(count2[c]) / (cycle_count)) - std::pow(std::get<2>(count1[c]) / (cycle_count), 2)))
+			) + delim +
+			std::to_string(
+				(int64_t)(std::get<2>(count1[c]) / (cycle_count)-2 * std::sqrt((std::get<2>(count2[c]) / (cycle_count)) - std::pow(std::get<2>(count1[c]) / (cycle_count), 2)))
+			) + delim +
+
+			std::to_string((int64_t)std::get<3>(count1[c]) / (cycle_count)) + delim +
+
+			std::to_string((int64_t)
+				(int64_t)(std::get<3>(count1[c]) / (cycle_count)+2 * std::sqrt((std::get<3>(count2[c]) / (cycle_count)) - std::pow(std::get<3>(count1[c]) / (cycle_count), 2)))
+			) + delim +
+			std::to_string(
+				(int64_t)(std::get<3>(count1[c]) / (cycle_count)-2 * std::sqrt((std::get<3>(count2[c]) / (cycle_count)) - std::pow(std::get<3>(count1[c]) / (cycle_count), 2)))
+			) + "\n";*/
+		for (auto& v : output) 
+			temp += std::to_string((size_t)(std::get<1>(v[c]))/(1)) + ";";
+		temp += "\n";
 		fout << temp;
 		std::cout << temp;
 		temp.clear();
