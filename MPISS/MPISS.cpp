@@ -19,7 +19,7 @@ int main() {
 	fout.rdbuf()->pubsetbuf(buf, bufsize);
 
 	auto cem = new mpiss::cemetery();
-	constexpr size_t N = 5000;
+	constexpr size_t N = 50000;
 
 #ifndef PROB_BASED
 	auto vec = std::vector<std::pair<mpiss::disease_state, mpiss::__prob_line>>{
@@ -40,7 +40,7 @@ int main() {
 		{0.0,0.0,1.0,0.0},
 		{0.0,0.0,0.0,1.0}
 	};
-	auto percent = new double(0.1);
+	auto contact_prob = new double(0.1);
 #else
 	constexpr float Tn = 21, Ph = 0.99, Pimm = (Ph / Tn), Pdead = ((1.f - Ph) / Tn) + Pimm;
 	auto vec = std::vector<mpiss::single_prob_branch>{
@@ -63,15 +63,19 @@ int main() {
 		{0.0,0.0,1.0,0.0},
 		{0.0,0.0,0.0,1.0}
 	};
-	auto contact_prob = new double(0.1);
+	auto variable_contact_prob = new double(0.);//variable probability of contact
+
+	auto contact_prob = new double(0.5/21.);//alpha
+
+	auto get_contact_prob = [variable_contact_prob,contact_prob, Tn](double fract_of_healthy) -> void {
+		*variable_contact_prob = *contact_prob * (fract_of_healthy) / Tn; // // alpha * healthy / N / Th // //
+	};
 #endif
 
 	mpiss::room r(contact_prob, spread_matrix, state_spread_modifier, cem);
 	for (int i = 0; i < N; i++) 
 		r.cells.push_back(new mpiss::cell(dp));
-	
-	/*for (int i = 0; i < N; i++)
-		r.cells[i]->next_disease_state = mpiss::disease_state::hidden_nonspreading;*/
+
 	r.cells[N / 10]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
 	r.cells[N / 5]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
 	r.cells[N / 2]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
@@ -80,14 +84,18 @@ int main() {
 	std::string temp = "";
 	const std::string delim = ";";
 
-	constexpr size_t iterations_count = 200, cycle_count = 1000;
+	constexpr size_t iterations_count = 300, cycle_count = 15;
 	std::vector<std::tuple<double, double, double, double>> count1(iterations_count, std::tuple<double, double, double, double>(0,0,0,0));
 	std::vector<std::tuple<double, double, double, double>> count2(iterations_count, std::tuple<double, double, double, double>(0,0,0,0));
+
+	std::tuple<double, std::string, int, double> c;
 
 	std::vector<decltype(count1)> output(cycle_count, count1);
 
 	for (size_t i = 0; i < cycle_count; i++) {
 		for (size_t c = 0; c < iterations_count; c++) {
+			get_contact_prob(r.counters[(size_t)mpiss::disease_state::healthy] / float(N));
+			//std::cout << *variable_contact_prob << std::endl;
 			r.make_iteration();
 			std::get<0>(count2[c]) += std::pow(r.counters[(size_t)mpiss::disease_state::healthy],2);
 			std::get<1>(count2[c]) += std::pow(r.get_sick_count(),2);
@@ -110,9 +118,10 @@ int main() {
 			t->value = mpiss::erand();
 			t->cur_disease_state = t->next_disease_state = mpiss::disease_state::healthy;
 		}
-
-		/*for (int i = 0; i < N; i++)
-			r.cells[i]->next_disease_state = mpiss::disease_state::hidden_nonspreading;*/
+		/*
+		for (int i = 0; i < N; i++)
+			r.cells[i]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
+		*/
 		r.cells[N / 10]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
 		r.cells[N / 5]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
 		r.cells[N / 2]->next_disease_state = mpiss::disease_state::hidden_nonspreading;

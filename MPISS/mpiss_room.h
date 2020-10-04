@@ -25,12 +25,14 @@ namespace mpiss {
 			state_spread_modifier(state_spread_modifier),
 			closest_cemetery(closest_cemetery)
 		{
+			clear_counters();
 		}
 		void make_iteration() {
 			auto it = cells.begin();
 			clear_counters();
 			for (; it != cells.end(); it++) {
 				(*it)->make_iteration();
+
 				double rnd = erand();
 				if (rnd < *contact_probability) {
 					size_t rnd_id = erand() * cells.size();
@@ -49,9 +51,8 @@ namespace mpiss {
 			_buffer_list.clear();
 		}
 		void clear_counters() {
-			for (int i = 0; i < state_enum_size; i++) {
+			for (int i = 0; i < state_enum_size; i++) 
 				counters[i] = 0;
-			}
 		}
 		void print_counters(std::ostream& out) const {
 			for (int i = 0; i < state_enum_size; i++)
@@ -61,8 +62,7 @@ namespace mpiss {
 			return
 				counters[(size_t)mpiss::disease_state::hidden_nonspreading] +
 				counters[(size_t)mpiss::disease_state::hidden_spreading] +
-				counters[(size_t)mpiss::disease_state::active_spread] +
-				counters[(size_t)mpiss::disease_state::dead];
+				counters[(size_t)mpiss::disease_state::active_spread];
 		}
 		void single_contact(std::vector<cell*>::iterator a_cell_id, std::vector<cell*>::iterator b_cell_id) {
 			if ((bool)(*a_cell_id)->cur_disease_state || (bool)(*b_cell_id)->cur_disease_state) {
