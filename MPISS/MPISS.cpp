@@ -34,12 +34,6 @@ int main() {
 		std::vector<mpiss::disease_progress_line>(mpiss::age_enum_size,vec)
 	};
 	auto state_spread_modifier = new point<mpiss::state_enum_size>{ 0.0,0.1,0.75,1.,0.000000001,0.1 };
-	auto spread_matrix = new sq_matrix<mpiss::age_enum_size>{
-		{1.0,0.0,0.0,0.0},
-		{0.0,1.0,0.0,0.0},
-		{0.0,0.0,1.0,0.0},
-		{0.0,0.0,0.0,1.0}
-	};
 	auto contact_prob = new double(0.1);
 #else
 	constexpr float Tn = 21, Ph = 0.99, Pimm = (Ph / Tn), Pdead = ((1.f - Ph) / Tn) + Pimm;
@@ -57,22 +51,16 @@ int main() {
 		std::vector<decltype(vec)>(mpiss::age_enum_size, vec)
 	);
 	auto state_spread_modifier = new point<mpiss::state_enum_size>{ 0.0, 1., 1., 1., 1., 0. };
-	auto spread_matrix = new sq_matrix<mpiss::age_enum_size>{
-		{1.0,0.0,0.0,0.0},
-		{0.0,1.0,0.0,0.0},
-		{0.0,0.0,1.0,0.0},
-		{0.0,0.0,0.0,1.0}
-	};
 	auto variable_contact_prob = new double(0.);//variable probability of contact
 
-	auto contact_prob = new double(0.5/21.);//alpha
+	auto contact_prob = new double(1./Tn);//alpha
 
 	auto get_contact_prob = [variable_contact_prob,contact_prob, Tn](double fract_of_healthy) -> void {
 		*variable_contact_prob = *contact_prob * (fract_of_healthy) / Tn; // // alpha * healthy / N / Th // //
 	};
 #endif
 
-	mpiss::room r(contact_prob, spread_matrix, state_spread_modifier, cem);
+	mpiss::room r(contact_prob, state_spread_modifier, cem);
 	for (int i = 0; i < N; i++) 
 		r.cells.push_back(new mpiss::cell(dp));
 
@@ -84,7 +72,7 @@ int main() {
 	std::string temp = "";
 	const std::string delim = ";";
 
-	constexpr size_t iterations_count = 300, cycle_count = 15;
+	constexpr size_t iterations_count = 300, cycle_count = 100;
 	std::vector<std::tuple<double, double, double, double>> count1(iterations_count, std::tuple<double, double, double, double>(0,0,0,0));
 	std::vector<std::tuple<double, double, double, double>> count2(iterations_count, std::tuple<double, double, double, double>(0,0,0,0));
 

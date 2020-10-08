@@ -22,7 +22,7 @@ def sird(X, t):
 def plotter(S, J, R, D, Time, file, rare):
     fig, ax = plt.subplots(figsize=(16, 10), dpi=150, facecolor='w', edgecolor='k')
     ax.set_yscale('log')
-    #ax.set_xlim([1,15])
+    ax.set_xlim([0,300])
     ax.set_ylim([0,10000])
     #ax.plot(Time, S, '-', color='blue',  linewidth=3, label='Healthy')
     ax.plot(Time, J, '-', color='red',   linewidth=3, label='Injured')

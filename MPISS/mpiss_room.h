@@ -9,7 +9,6 @@ namespace mpiss {
 
 	struct room {
 		double* contact_probability;
-		sq_matrix<age_enum_size>* spread_matrix_ptr;
 		point<state_enum_size>* state_spread_modifier;
 		cemetery* closest_cemetery;
 		std::vector<cell*> cells;
@@ -17,11 +16,9 @@ namespace mpiss {
 		size_t counters[state_enum_size];
 		room(
 			double* contact_probability,
-			sq_matrix<age_enum_size>* spread_matrix_ptr,
 			point<state_enum_size>* state_spread_modifier,
 			cemetery* closest_cemetery
 		) : contact_probability(contact_probability),
-			spread_matrix_ptr(spread_matrix_ptr),
 			state_spread_modifier(state_spread_modifier),
 			closest_cemetery(closest_cemetery)
 		{
@@ -36,7 +33,7 @@ namespace mpiss {
 				double rnd = erand();
 				if (rnd < *contact_probability) {
 					size_t rnd_id = erand() * cells.size();
-					single_contact(cells.begin() + rnd_id, it);
+					single_contact(it, cells.begin() + rnd_id);
 				}
 
 				if ((*it)->cur_disease_state == disease_state::dead)
@@ -65,11 +62,9 @@ namespace mpiss {
 				counters[(size_t)mpiss::disease_state::active_spread];
 		}
 		void single_contact(std::vector<cell*>::iterator a_cell_id, std::vector<cell*>::iterator b_cell_id) {
-			if ((bool)(*a_cell_id)->cur_disease_state || (bool)(*b_cell_id)->cur_disease_state) {
-				if (!(bool)(*a_cell_id)->cur_disease_state)
-					std::swap(a_cell_id, b_cell_id);
-				double t = erand() / (state_spread_modifier->operator[]((size_t)(*a_cell_id)->cur_disease_state));
-				if (t < spread_matrix_ptr->at((size_t)(*a_cell_id)->age_t, (size_t)(*b_cell_id)->age_t) && !(bool)(*b_cell_id)->cur_disease_state) {
+			if ((bool)(*a_cell_id)->cur_disease_state) {
+				auto t = erand() / (state_spread_modifier->operator[]((size_t)(*a_cell_id)->cur_disease_state));
+				if (t < 1. && !(bool)(*b_cell_id)->cur_disease_state) {
 					(*b_cell_id)->next_disease_state = disease_state::hidden_nonspreading;
 				}
 			}
