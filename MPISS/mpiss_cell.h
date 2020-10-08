@@ -11,7 +11,7 @@ namespace mpiss {
 		disease_state next_disease_state;
 		int64_t time_since_contact;
 		disease_progress* dp_module;
-		float value;
+		double value;
 		cell(disease_progress* dp_module, mpiss::age_type age_t = mpiss::age_type::mature) :
 			age_t(age_t), 
 			cur_disease_state(mpiss::disease_state::healthy), 

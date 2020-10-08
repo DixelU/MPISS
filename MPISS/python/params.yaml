@@ -10,7 +10,7 @@ times:
 
 popul:
   total: 50000
-  healthy: 49997
-  injured: 3
+  healthy: 49899
+  injured: 100
   dead:      0
   recovered: 0

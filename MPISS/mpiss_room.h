@@ -25,21 +25,21 @@ namespace mpiss {
 			clear_counters();
 		}
 		void make_iteration() {
-			auto it = cells.begin();
 			clear_counters();
-			for (; it != cells.end(); it++) {
-				(*it)->make_iteration();
-
+			for (auto cell : cells) 
+				counters[(size_t)cell->cur_disease_state]++;
+			for (auto it = cells.begin(); it != cells.end(); it++) {
 				double rnd = erand();
 				if (rnd < *contact_probability) {
 					size_t rnd_id = erand() * cells.size();
 					single_contact(it, cells.begin() + rnd_id);
 				}
-
+			}
+			for (auto cell : cells) 
+				cell->make_iteration();
+			for (auto it = cells.begin(); it != cells.end(); it++) {
 				if ((*it)->cur_disease_state == disease_state::dead)
 					_buffer_list.push_back(it - cells.begin());
-
-				counters[(size_t)(*it)->cur_disease_state]++;
 			}
 			for (auto entry_rit = _buffer_list.rbegin(); entry_rit != _buffer_list.rend(); entry_rit++)
 				closest_cemetery->take_from(cells, *entry_rit);
@@ -62,9 +62,13 @@ namespace mpiss {
 				counters[(size_t)mpiss::disease_state::active_spread];
 		}
 		void single_contact(std::vector<cell*>::iterator a_cell_id, std::vector<cell*>::iterator b_cell_id) {
-			if ((bool)(*a_cell_id)->cur_disease_state) {
-				auto t = erand() / (state_spread_modifier->operator[]((size_t)(*a_cell_id)->cur_disease_state));
-				if (t < 1. && !(bool)(*b_cell_id)->cur_disease_state) {
+			bool a_or_b = (bool)(*a_cell_id)->cur_disease_state || (bool)(*b_cell_id)->cur_disease_state;
+			bool a_and_b = (bool)(*a_cell_id)->cur_disease_state && (bool)(*b_cell_id)->cur_disease_state;
+			if (a_or_b && !a_and_b) {
+				if ((bool)(*b_cell_id)->cur_disease_state)
+					std::swap(a_cell_id, b_cell_id);
+				auto t = erand();
+				if (t < (state_spread_modifier->operator[]((size_t)(*a_cell_id)->cur_disease_state))) {
 					(*b_cell_id)->next_disease_state = disease_state::hidden_nonspreading;
 				}
 			}

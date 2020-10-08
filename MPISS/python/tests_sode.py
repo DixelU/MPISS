@@ -21,13 +21,12 @@ def sird(X, t):
 # plotter 
 def plotter(S, J, R, D, Time, file, rare):
     fig, ax = plt.subplots(figsize=(16, 10), dpi=150, facecolor='w', edgecolor='k')
-    ax.set_yscale('log')
-    ax.set_xlim([0,300])
-    ax.set_ylim([0,10000])
+    #ax.set_yscale('log')
+    #ax.set_ylim([0,15000])
     #ax.plot(Time, S, '-', color='blue',  linewidth=3, label='Healthy')
-    ax.plot(Time, J, '-', color='red',   linewidth=3, label='Injured')
-    ax.plot(Time, 3.*np.exp((1./21)*Time), '--', color='blue',   linewidth=3, label='Test-exp')
-    #ax.plot(Time, R, '-', color='green', linewidth=3, label='Recovered')
+    #ax.plot(Time, J, '-', color='red',   linewidth=3, label='Injured')
+    #ax.plot(Time, 3.*np.exp((1./21)*Time), '--', color='blue',   linewidth=3, label='Test-exp')
+    ax.plot(Time, R, '-', color='green', linewidth=3, label='Recovered')
     #ax.plot(Time, D, '-', color='black', linewidth=3, label='Dead')
     ax.set_xlabel('Time, in days', fontsize=16)
     ax.set_ylabel('S, J, R, D', fontsize=16)
