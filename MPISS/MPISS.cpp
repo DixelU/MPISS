@@ -36,12 +36,13 @@ int main() {
 	auto state_spread_modifier = new point<mpiss::state_enum_size>{ 0.0,0.1,0.75,1.,0.000000001,0.1 };
 	auto contact_prob = new double(0.1);
 #else
-	constexpr double Tn = 21, Ph = 0.99, Pimm = (Ph / Tn), Pdead = ((1.f - Ph) / Tn) + Pimm;
+	constexpr double Tn = 21, Ph = 0.99, Pimm = (Ph / Tn), Pdead_or_imm = ((1.f - Ph) / Tn) + Pimm;
 	auto vec = std::vector<mpiss::single_prob_branch>{
 		mpiss::single_prob_branch({}),
 		mpiss::single_prob_branch({
 			{mpiss::disease_state::immune, Pimm},
-			{mpiss::disease_state::dead, Pdead}
+			{mpiss::disease_state::dead, Pdead_or_imm},
+			{mpiss::disease_state::hidden_nonspreading, 1}
 		}),
 		mpiss::single_prob_branch({}),
 		mpiss::single_prob_branch({}),
@@ -50,14 +51,9 @@ int main() {
 	auto dp = new mpiss::probability_disease_progress(
 		std::vector<decltype(vec)>(mpiss::age_enum_size, vec)
 	);
-	auto state_spread_modifier = new point<mpiss::state_enum_size>{ 0.0, 1., 1., 1., 1., 0. };
-	auto variable_contact_prob = new double(0.);//variable probability of contact
+	auto state_spread_modifier = new point<mpiss::state_enum_size>{ 0.0, 1., 1., 1., 0., 0. };
 
-	auto contact_prob = new double(1./Tn);//alpha
-
-	auto get_contact_prob = [variable_contact_prob,contact_prob, Tn](double fract_of_healthy) -> void {
-		*variable_contact_prob = *contact_prob * (fract_of_healthy) / Tn; // // alpha * healthy / N / Th // //
-	};
+	auto contact_prob = new double(2./Tn);//alpha
 
 	//*state_spread_modifier *= (1 - Pdead);
 #endif
@@ -70,12 +66,10 @@ int main() {
 	std::string temp = "";
 	const std::string delim = ";";
 
-	constexpr size_t iterations_count = 300, cycle_count = 15;
+	constexpr size_t iterations_count = 300, cycle_count = 50;
 	constexpr size_t amount_of_sick = 100;
 	std::vector<std::tuple<double, double, double, double>> count1(iterations_count, std::tuple<double, double, double, double>(0,0,0,0));
-	std::vector<std::tuple<double, double, double, double>> count2(iterations_count, std::tuple<double, double, double, double>(0,0,0,0));
-
-	std::tuple<double, std::string, int, double> c;
+	std::vector<std::tuple<double, double, double, double>> count2(iterations_count, std::tuple<double, double, double, double>(0,0,0,0)); 
 
 	std::vector<decltype(count1)> output(cycle_count, count1);
 	
@@ -84,8 +78,6 @@ int main() {
 
 	for (size_t i = 0; i < cycle_count; i++) {
 		for (size_t c = 0; c < iterations_count; c++) {
-			get_contact_prob(r.counters[(size_t)mpiss::disease_state::healthy] / float(N));
-			//std::cout << *variable_contact_prob << std::endl;
 			r.make_iteration();
 			/*
 			std::get<0>(count2[c]) += std::pow(r.counters[(size_t)mpiss::disease_state::healthy],2);
@@ -112,7 +104,7 @@ int main() {
 		//std::cout << "Deads reset" << std::endl;
 		for (auto& t : r.cells) {
 			t->time_since_contact = -1;
-			//t->value = mpiss::erand();
+			t->value = mpiss::erand();
 			t->cur_disease_state = t->next_disease_state = mpiss::disease_state::healthy;
 		}
 		
@@ -123,9 +115,8 @@ int main() {
 		std::cout << "Loop " << i << std::endl;
 	}
 	for (size_t c = 0; c < iterations_count; c++) {
-		
 		for (auto& v : output) 
-			temp += std::to_string((size_t)(std::get<1>(v[c]))/(1)) + ";";
+			temp += std::to_string((size_t)(std::get<1>(v[c]))) + ";";
 		temp += "\n";
 		fout << temp;
 		std::cout << temp;

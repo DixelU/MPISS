@@ -55,6 +55,12 @@ namespace mpiss {
 	constexpr float neg_inf = -INFINITY;
 	constexpr float pos_inf = INFINITY;
 
+	inline bool state_considered_sick(disease_state dis_st) {
+		return (dis_st!= disease_state::dead &&	dis_st != disease_state::healthy &&	dis_st != disease_state::immune);
+	}
+	inline bool state_considered_stable(disease_state dis_st) {
+		return (dis_st != disease_state::healthy && dis_st != disease_state::immune);
+	}
 
 	struct disease_progress {
 		virtual mpiss::disease_state update_disease_state(
