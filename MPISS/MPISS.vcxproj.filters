@@ -26,9 +26,6 @@
     <ClInclude Include="mpiss_cemetery.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="mpiss_disease_progress_line.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="mpiss_cell.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
@@ -36,6 +33,15 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="probabiliy_disease_progress.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="mpiss_town.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="mpiss_sheduled_cell.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="__mpiss_disease_progress_line.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

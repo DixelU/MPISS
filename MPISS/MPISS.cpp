@@ -1,13 +1,16 @@
 ﻿#include <iostream>
 #include <fstream>
 
-#include "mpiss_room.h"
-#include "mpiss_disease_progress_line.h"
+#include "mpiss_town.h"
 #include "probabiliy_disease_progress.h"
 
-#define line_entry(__t,__s,__o) std::pair<mpiss::disease_state, mpiss::__prob_line>(__t, mpiss::__prob_line{__s,__o})
+#include "JSON/JSON.h"
+#include "tinyexpr.h"
 
-#define PROB_BASED 
+struct town_info {
+	std::wstring info_filename;
+	
+};
 
 int main() {
 	std::ios_base::sync_with_stdio(false); 
@@ -21,21 +24,6 @@ int main() {
 	auto cem = new mpiss::cemetery();
 	constexpr size_t N = 50000;
 
-#ifndef PROB_BASED
-	auto vec = std::vector<std::pair<mpiss::disease_state, mpiss::__prob_line>>{
-		line_entry(mpiss::disease_state::hidden_nonspreading, 0.5, 0),
-		line_entry(mpiss::disease_state::hidden_spreading, 100, 150),
-		line_entry(mpiss::disease_state::active_spread, 200, 300),
-		line_entry(mpiss::disease_state::dead, 100, 600),
-		line_entry(mpiss::disease_state::immune, 99.75, 600),
-		line_entry(mpiss::disease_state::healthy, 600, 2000),
-	};
-	auto dp = new mpiss::aged_disease_progress_line{
-		std::vector<mpiss::disease_progress_line>(mpiss::age_enum_size,vec)
-	};
-	auto state_spread_modifier = new point<mpiss::state_enum_size>{ 0.0,0.1,0.75,1.,0.000000001,0.1 };
-	auto contact_prob = new double(0.1);
-#else
 	constexpr double Tn = 21, Ph = 0.99, Pimm = (Ph / Tn), Pdead_or_imm = ((1.f - Ph) / Tn) + Pimm;
 	auto vec = std::vector<mpiss::single_prob_branch>{
 		mpiss::single_prob_branch({}),
@@ -51,12 +39,9 @@ int main() {
 	auto dp = new mpiss::probability_disease_progress(
 		std::vector<decltype(vec)>(mpiss::age_enum_size, vec)
 	);
-	auto state_spread_modifier = new point<mpiss::state_enum_size>{ 0.0, 1., 1., 1., 0., 0. };
+	auto state_spread_modifier = new point<mpiss::state_enum_size>{ 0.0, 1., 1., 1., 1., 0., 0. };
 
 	auto contact_prob = new double(2./Tn);//alpha
-
-	//*state_spread_modifier *= (1 - Pdead);
-#endif
 
 	mpiss::room r(contact_prob, state_spread_modifier, cem);
 	for (int i = 0; i < N; i++) 

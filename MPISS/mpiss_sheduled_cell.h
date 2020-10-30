@@ -16,7 +16,7 @@ namespace mpiss {
 			type(type), id(id), len(len), n_disp(n_disp) {
 			left = len;
 		}
-		inline size_t get_rand_id() {
+		inline double get_rand_id() {
 			return id + nrand() * n_disp;
 		}
 		inline bool iterate() {

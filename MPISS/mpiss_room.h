@@ -62,6 +62,12 @@ namespace mpiss {
 			for (int i = 0; i < state_enum_size; i++)
 				out << magic_enum::enum_name<disease_state>((disease_state)i) << ": " << counters[i] << std::endl;
 		}
+		cell* remove_cell_without_destroying(size_t id) {
+			std::swap(cells[id], cells.back());
+			auto ret_ptr = cells.back();
+			cells.pop_back();
+			return ret_ptr;
+		}
 		size_t get_sick_count() const {
 			return
 				counters[(size_t)mpiss::disease_state::hidden_nonspreading] +

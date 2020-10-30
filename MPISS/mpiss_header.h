@@ -40,7 +40,7 @@ namespace mpiss {
 		, null = 4
 	};
 	enum class disease_state {
-		healthy = 0, hidden_nonspreading = 1, hidden_spreading = 2, active_spread = 3, immune = 4, dead = 5
+		healthy = 0, hidden_nonspreading = 1, hidden_spreading = 2, active_spread = 3, spreading_immune = 4, immune = 5, dead = 6
 		, null = 6
 	};
 
