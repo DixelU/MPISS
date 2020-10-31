@@ -1,0 +1,286 @@
+{
+    "aged_population": {
+        "kid": 5000,
+        "teen": 10000,
+        "mature": 25000,
+        "old": 10000
+    },
+    "rooms_count": {
+        "home": 25000,
+        "transport": 10000,
+        "work": 1000,
+        "magazine": 100,
+        "school": 100
+    },
+    "possible_main_tracks": {
+        "kid": {
+            "0": {
+                "prob": 99,
+                "track": "H",
+                "length": [
+                    1
+                ],
+                "pos_rand": [
+                    0
+                ]
+            },
+            "1": {
+                "prob": 1,
+                "track": "HMH",
+                "length": [
+                    13,
+                    1,
+                    10
+                ],
+                "pos_rand": [
+                    0,
+                    0,
+                    0
+                ]
+            }
+        },
+        "teen": {
+            "0": {
+                "prob": 25,
+                "track": "HTSTMH",
+                "length": [
+                    7,
+                    1,
+                    6,
+                    1,
+                    1,
+                    8
+                ],
+                "pos_rand": [
+                    0,
+                    5,
+                    0,
+                    5,
+                    1,
+                    0
+                ]
+            },
+            "1": {
+                "prob": 10,
+                "track": "HTSTHH",
+                "length": [
+                    7,
+                    1,
+                    6,
+                    1,
+                    3,
+                    6
+                ],
+                "pos_rand": [
+                    0,
+                    5,
+                    0,
+                    5,
+                    1,
+                    0
+                ]
+            },
+            "2": {
+                "prob": 65,
+                "track": "HTSTH",
+                "length": [
+                    7,
+                    1,
+                    6,
+                    1,
+                    9
+                ],
+                "pos_rand": [
+                    0,
+                    5,
+                    0,
+                    5,
+                    0
+                ]
+            }
+        },
+        "mature": {
+            "0": {
+                "prob": 25,
+                "track": "HTSWMTH",
+                "length": [
+                    7,
+                    1,
+                    1,
+                    9,
+                    1,
+                    1,
+                    4
+                ],
+                "pos_rand": [
+                    0,
+                    5,
+                    0,
+                    0,
+                    0,
+                    5,
+                    0
+                ]
+            },
+            "1": {
+                "prob": 75,
+                "track": "HTWMTH",
+                "length": [
+                    7,
+                    1,
+                    9,
+                    1,
+                    1,
+                    6
+                ],
+                "pos_rand": [
+                    0,
+                    5,
+                    0,
+                    10,
+                    5,
+                    0
+                ]
+            }
+        },
+        "old": {
+            "0": {
+                "prob": 25,
+                "track": "HTWMTH",
+                "length": [
+                    7,
+                    1,
+                    9,
+                    1,
+                    5
+                ],
+                "pos_rand": [
+                    0,
+                    5,
+                    0,
+                    5,
+                    0
+                ]
+            },
+            "1": {
+                "prob": 50,
+                "track": "HMH",
+                "length": [
+                    13,
+                    1,
+                    10
+                ],
+                "pos_rand": [
+                    0,
+                    0,
+                    0
+                ]
+            },
+            "2": {
+                "prob": 25,
+                "track": "H",
+                "length": [
+                    1
+                ],
+                "pos_rand": [
+                    0
+                ]
+            }
+        }
+    },
+    "additional_tracks": {
+        "0": {
+            "0": {
+                "prob": 95,
+                "track": "HMH",
+                "length": [
+                    161,
+                    1,
+                    6
+                ],
+                "pos_rand": [
+                    0,
+                    1,
+                    0
+                ]
+            },
+            "1": {
+                "prob": 5,
+                "track": "HTWMTH",
+                "length": [
+                    7,
+                    1,
+                    9,
+                    1,
+                    1,
+                    6
+                ],
+                "pos_rand": [
+                    0,
+                    5,
+                    0,
+                    10,
+                    5,
+                    0
+                ]
+            },
+            "assign_address": [
+                "mature"
+            ]
+        },
+        "1": {
+            "0": {
+                "prob": 95,
+                "track": "HMH",
+                "length": [
+                    159,
+                    1,
+                    8
+                ],
+                "pos_rand": [
+                    0,
+                    1,
+                    0
+                ]
+            },
+            "assign_address": [
+                "kid",
+                "teen",
+                "old"
+            ]
+        }
+    },
+    "map_functions": {
+        "kid": {
+            "to_home": "x",
+            "to_transportation": "x",
+            "to_work": "x",
+            "to_magazine": "x",
+            "to_school": "x"
+        },
+        "teen": {
+            "to_home": "x",
+            "to_transportation": "x",
+            "to_work": "x",
+            "to_magazine": "x",
+            "to_school": "x"
+        },
+        "mature": {
+            "to_home": "x",
+            "to_transportation": "x",
+            "to_work": "x",
+            "to_magazine": "x",
+            "to_school": "x"
+        },
+        "old": {
+            "to_home": "x",
+            "to_transportation": "x",
+            "to_work": "x",
+            "to_magazine": "x",
+            "to_school": "x"
+        }
+    },
+    "switch_functions":{
+    	"carantine_percentage": "0"
+    }
+}

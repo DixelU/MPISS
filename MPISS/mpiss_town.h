@@ -24,10 +24,10 @@ namespace mpiss {
 		void reset() {
 			for (auto& dead : cem->deads) {
 				dead->reset();
-				auto dead_sh = &CAST_SHEDULED(dead);
+				auto dead_sh = CAST_PSHEDULED(*dead);
 				auto it = std::find_if(
-					dead_sh->shedule->begin(), 
-					dead_sh->shedule->end(),
+					(*(dead_sh->shedule)).begin(),
+					(*(dead_sh->shedule)).end(),
 					[](const shedule_ticket& t) -> bool {
 						return t.type == shedule_place::home; 
 					}
@@ -64,7 +64,7 @@ namespace mpiss {
 						auto s_cell = CAST_PSHEDULED(*c_cell_it);
 						if (s_cell->cur_shedule != s_cell->prev_shedule) {
 							flag_back_move = true;
-							auto& shedule = s_cell->shedule->operator[](s_cell->cur_shedule);
+							auto& shedule = (*s_cell->shedule)[s_cell->cur_shedule];
 							auto cell_ptr = (sheduled_cell*)single_place.remove_cell_without_destroying(c_cell_it - single_place.cells.begin());
 							auto& place_type_ref = places[shedule.type];
 							double place_type_amount = place_type_ref.size();

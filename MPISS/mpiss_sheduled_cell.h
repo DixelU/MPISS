@@ -6,8 +6,9 @@
 
 namespace mpiss {
 	enum class shedule_place {
-		home, transportation, work, magazine, school
+		home = 0, transport = 1, work = 2, magazine = 3, school = 4, null = 5
 	};
+	constexpr size_t shedule_enum_size = (size_t)shedule_place::null;
 	struct shedule_ticket {
 		shedule_place type;
 		size_t id, len, left;
@@ -17,7 +18,7 @@ namespace mpiss {
 			left = len;
 		}
 		inline double get_rand_id() {
-			return id + nrand() * n_disp;
+			return id + (nrand() * n_disp);
 		}
 		inline bool iterate() {
 			if (!left) {
@@ -28,11 +29,29 @@ namespace mpiss {
 			return true;
 		}
 	};
+	struct dynamic_shedule_list {
+		std::vector<std::vector<shedule_ticket>> shedules;
+		size_t base_shedule_list_no;
+		size_t override_shedule_no;
+		dynamic_shedule_list(const std::vector<std::vector<shedule_ticket>>& shedules) : shedules(shedules), base_shedule_list_no(0), override_shedule_no(0) { }
+		inline std::vector<shedule_ticket>& operator*() {
+			return shedules[override_shedule_no % shedules.size()];
+		}
+		inline const std::vector<shedule_ticket>& operator*() const {
+			return shedules[override_shedule_no % shedules.size()];
+		}
+		inline void override_shedule_no(size_t override_no) {
+			override_shedule_no = override_no;
+		}
+		inline void revert_all_overrides() {
+			override_shedule_no = base_shedule_list_no;
+		}
+	};
 	struct sheduled_cell : cell {
-		std::vector<shedule_ticket> *shedule;
+		dynamic_shedule_list& shedule;
 		int cur_shedule;
 		int prev_shedule;
-		sheduled_cell(disease_progress* dp_module, std::vector<shedule_ticket> *shedule, mpiss::age_type age_t = mpiss::age_type::mature) :
+		sheduled_cell(disease_progress* dp_module, dynamic_shedule_list& shedule, mpiss::age_type age_t = mpiss::age_type::mature) :
 			cell(dp_module, age_t), shedule(shedule), cur_shedule(0), prev_shedule(0) {
 
 		}

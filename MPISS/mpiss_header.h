@@ -23,7 +23,11 @@ namespace mpiss {
 		};
 		grand __gr;
 
-
+		bool is_number(const std::wstring& s) { 
+			auto it = s.begin();
+			while (it != s.end() && std::isdigit(*it)) ++it;
+			return s.size() && it == s.end();
+		}
 	}
 	double nrand() {
 		__utils::__gr.locker.lock();
