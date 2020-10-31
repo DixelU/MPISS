@@ -178,7 +178,9 @@ struct town_builder {
 				warning_list += "Additional tracks are present, yet are not an object.\n";
 			else {
 				auto additional_tracks = additional_tracks_it->second->AsObject();
+				/// TODO: duplicate code above to work on additional_tracks
 			}
+			/// TODO: add map_functions and switch_functions here
 		}
 		else
 			return last_error = "Loading failed: not an object.", false;
