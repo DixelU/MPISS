@@ -2,6 +2,7 @@
 #ifndef MPISS_SHEDULED_CELL_NDEF
 #define MPISS_SHEDULED_CELL_NDEF
 
+#include "mpiss_cell.h"
 #include "mpiss_room.h"
 
 namespace mpiss {
@@ -17,6 +18,8 @@ namespace mpiss {
 			type(type), id(id), len(len), n_disp(n_disp) {
 			left = len;
 		}
+		shedule_ticket() : shedule_ticket(shedule_place::null, 0, 1, 0) {
+		}
 		inline double get_rand_id() {
 			return id + (nrand() * n_disp);
 		}
@@ -29,39 +32,41 @@ namespace mpiss {
 			return true;
 		}
 	};
+
 	struct dynamic_shedule_list {
 		std::vector<std::vector<shedule_ticket>> shedules;
 		size_t base_shedule_list_no;
-		size_t override_shedule_no;
-		dynamic_shedule_list(const std::vector<std::vector<shedule_ticket>>& shedules) : shedules(shedules), base_shedule_list_no(0), override_shedule_no(0) { }
+		size_t override_no;
+		dynamic_shedule_list(const std::vector<std::vector<shedule_ticket>>& shedules) : shedules(shedules), base_shedule_list_no(0), override_no(0) { }
 		inline std::vector<shedule_ticket>& operator*() {
-			return shedules[override_shedule_no % shedules.size()];
+			return shedules[override_no % shedules.size()];
 		}
 		inline const std::vector<shedule_ticket>& operator*() const {
-			return shedules[override_shedule_no % shedules.size()];
+			return shedules[override_no % shedules.size()];
 		}
 		inline void override_shedule_no(size_t override_no) {
-			override_shedule_no = override_no;
+			this->override_no = override_no;
 		}
 		inline void revert_all_overrides() {
-			override_shedule_no = base_shedule_list_no;
+			override_no = base_shedule_list_no;
 		}
 	};
-	struct sheduled_cell : cell {
-		dynamic_shedule_list& shedule;
+
+	struct sheduled_cell : mpiss::cell {
+		dynamic_shedule_list shedule;
 		int cur_shedule;
 		int prev_shedule;
-		sheduled_cell(disease_progress* dp_module, dynamic_shedule_list& shedule, mpiss::age_type age_t = mpiss::age_type::mature) :
-			cell(dp_module, age_t), shedule(shedule), cur_shedule(0), prev_shedule(0) {
+		sheduled_cell(disease_progress* dp_module, dynamic_shedule_list shedule, mpiss::age_type age_t = mpiss::age_type::mature) : 
+			mpiss::cell(dp_module, age_t), shedule(shedule), cur_shedule(0), prev_shedule(0) {
 
 		}
 		inline void reset() override {
-			cell::reset();
+			mpiss::cell::reset();
 			(*shedule)[cur_shedule].left = (*shedule)[cur_shedule].len;
 			cur_shedule = 0;
 		}
 		void make_iteration() override {
-			cell::make_iteration();
+			mpiss::cell::make_iteration();
 			prev_shedule = cur_shedule;
 			if (!(*shedule)[cur_shedule].iterate()) {
 				cur_shedule++;

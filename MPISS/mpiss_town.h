@@ -4,7 +4,6 @@
 
 #include <unordered_map>
 
-#include "mpiss_cell.h"
 #include "mpiss_room.h"
 #include "mpiss_sheduled_cell.h"
 
@@ -86,5 +85,8 @@ namespace mpiss {
 		}
 	};
 }
+
+#undef CAST_SHEDULED
+#undef CAST_PSHEDULED
 
 #endif

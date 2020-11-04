@@ -44,5 +44,8 @@
     <ClInclude Include="__mpiss_disease_progress_line.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="exprtk_wrapper.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

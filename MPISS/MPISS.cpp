@@ -1,13 +1,64 @@
-﻿#include <iostream>
+﻿#define NOMINMAX 1
+#include <Windows.h>
+#include <algorithm>
+
+#include <iostream>
 #include <fstream>
 #include <sstream>
+#include <string>
 
 #include "mpiss_town.h"
 #include "probabiliy_disease_progress.h"
 
-#include "JSON/JSON.h"
+#include "JSON/JSON.cpp"
+#include "JSON/JSONValue.cpp"
+
 #include "exprtk_wrapper.h"
 
+inline std::vector<std::wstring> MOFD(const wchar_t* Title) {
+	OPENFILENAME ofn;       // common dialog box structure
+	wchar_t szFile[50000];       // buffer for file name
+	std::vector<std::wstring> InpLinks;
+	ZeroMemory(&ofn, sizeof(ofn));
+	ZeroMemory(szFile, 50000);
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = NULL;
+	ofn.lpstrFile = szFile;
+	ofn.lpstrFile[0] = '\0';
+	ofn.nMaxFile = sizeof(szFile);
+	ofn.lpstrFilter = L"JSON Files(*.json)\0*.json\0";
+	ofn.nFilterIndex = 1;
+	ofn.lpstrFileTitle = NULL;
+	ofn.lpstrTitle = Title;
+	ofn.nMaxFileTitle = 0;
+	ofn.lpstrInitialDir = NULL;
+	ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;
+	if (GetOpenFileName(&ofn)) {
+		std::wstring Link = L"", Gen = L"";
+		int i = 0, counter = 0;
+		for (; i < 600 && szFile[i] != '\0'; i++) {
+			Link.push_back(szFile[i]);
+		}
+		for (; i < 49998;) {
+			counter++;
+			Gen = L"";
+			for (; i < 49998 && szFile[i] != '\0'; i++) {
+				Gen.push_back(szFile[i]);
+			}
+			i++;
+			if (szFile[i] == '\0') {
+				if (counter == 1) InpLinks.push_back(Link);
+				else InpLinks.push_back(Link + L"\\" + Gen);
+				break;
+			}
+			else {
+				if (Gen != L"")InpLinks.push_back(Link + L"\\" + Gen);
+			}
+		}
+		return InpLinks;
+	}
+	return {};
+}
 using mpiss::__utils::is_number;
 
 struct town_builder {
@@ -15,180 +66,189 @@ struct town_builder {
 	std::string last_error = "";
 	std::string warning_list = "";
 	size_t population[mpiss::age_enum_size];
-	size_t rooms_count[mpiss::shedule_enum_size];
+	size_t rooms_count[mpiss::shedule_enum_size]; 
 
-	std::map<mpiss::age_type, std::vector<std::pair<double, mpiss::dynamic_shedule_list>>> main_tracks;
+	size_t ticks_in_day = 1;
+	std::vector<std::pair<mpiss::age_type, mpiss::dynamic_shedule_list>> cells_tracks;
+
+	template<typename b_str_type>
+	inline static auto track_read(std::basic_string<b_str_type> str) {
+		std::vector<mpiss::shedule_ticket> shed_ticket;
+		mpiss::shedule_ticket singular_ticket;
+		auto tickets = mpiss::split<b_str_type>(str,(b_str_type)';');
+		for (auto& ticket : tickets) {
+			if (ticket.empty())
+				continue;
+
+			auto ticket_sub_separated_data = mpiss::split<b_str_type>(ticket, (b_str_type)':');
+
+			if (ticket_sub_separated_data.size()) {
+				auto ptr = std::find_if(ticket_sub_separated_data[0].begin(), ticket_sub_separated_data[0].end(), [](const auto& ch) {
+					return (ch == (b_str_type)'H') || (ch == (b_str_type)'W') || (ch == (b_str_type)'T') || (ch == (b_str_type)'M') || (ch == (b_str_type)'S');
+				});
+				if (ptr != ticket_sub_separated_data[0].end()) {
+					switch ((char)ticket_sub_separated_data[0][0]) {
+					case 'H':
+						singular_ticket.type = mpiss::shedule_place::home;
+						break;
+					case 'W':
+						singular_ticket.type = mpiss::shedule_place::work;
+						break;
+					case 'T':
+						singular_ticket.type = mpiss::shedule_place::transport;
+						break;
+					case 'M':
+						singular_ticket.type = mpiss::shedule_place::magazine;
+						break;
+					case 'S':
+						singular_ticket.type = mpiss::shedule_place::school;
+						break;
+					}
+				}
+			}
+			else
+				continue;
+
+			if (ticket_sub_separated_data.size() > 1 && ticket_sub_separated_data[1].size())
+				singular_ticket.id = std::stol(ticket_sub_separated_data[1]);
+
+			if (ticket_sub_separated_data.size() > 2 && ticket_sub_separated_data[2].size())
+				singular_ticket.len = std::stol(ticket_sub_separated_data[2]);
+
+			if (ticket_sub_separated_data.size() > 3 && ticket_sub_separated_data[3].size())
+				singular_ticket.n_disp = std::stod(ticket_sub_separated_data[3]);
+			
+			shed_ticket.push_back(singular_ticket);
+		}
+		return std::move(shed_ticket);
+	}
+
+	inline static void update_maximal_tickets( const std::vector<mpiss::shedule_ticket>& new_shedule_list, std::array<size_t, mpiss::shedule_enum_size>& total_rooms_used ) {
+		for (const auto& ticket : new_shedule_list) 
+			total_rooms_used[(size_t)ticket.type] = std::max(total_rooms_used[(size_t)ticket.type], ticket.id);
+	}
 
 	bool load() {
-		std::ifstream in(info_filename);
-		std::wstringstream sstream;
-		sstream << in.rdbuf();
-		std::wstring json = sstream.str();
+		std::ifstream in(info_filename, std::ios::in);
+		std::array<size_t, mpiss::shedule_enum_size> total_rooms_used;
+		std::wstring json;
+		std::copy(std::istream_iterator<char>(in), std::istream_iterator<char>(), std::back_inserter(json));
 		last_error = warning_list = "";
+		for (int i = 0; i < mpiss::age_enum_size; i++)
+			population[i] = 0;
+		for (int i = 0; i < mpiss::shedule_enum_size; i++)
+			rooms_count[i] = 0;
 		auto JObject = JSON::Parse(json.c_str());
+		if (!JObject)
+			return last_error = "JObject - is null", false;
 		if (JObject->IsObject()) {
-			auto main_obj = JObject->AsObject();
-			auto aged_pop_it = main_obj.find(L"aged_population");
-			auto rooms_cnt_it = main_obj.find(L"rooms_count");
-			if (aged_pop_it == main_obj.end() || rooms_cnt_it == main_obj.end())
-				return last_error = "Loading failed: no population/rooms data.", false;
-			if (!aged_pop_it->second->IsObject() || !rooms_cnt_it->second->IsObject())
-				return last_error = "Loading failed: incorrect type of population/rooms data.", false;
-			auto aged_pop_obj = aged_pop_it->second->AsObject();
-			auto rooms_cnt_obj = rooms_cnt_it->second->AsObject();
-			for (int cur_age = 0; cur_age < mpiss::age_enum_size; cur_age++) {
-				std::string enum_name = magic_enum::enum_name<mpiss::age_type>((mpiss::age_type)cur_age).data();
-				std::wstring l_enum_name = std::wstring(enum_name.begin(), enum_name.end());
-				auto it = aged_pop_obj.find(l_enum_name);
-				if (it != aged_pop_obj.end()) {
-					if (it->second->IsNumber())
-						population[cur_age] = it->second->AsNumber();
-					else {
-						warning_list += "Not a numeric data for " + enum_name + "s count\n";
-						population[cur_age] = 0;
-					}
+			auto& main_obj = JObject->AsObject();
+			auto town_cit = main_obj.find(L"town");
+			auto lockdown_functions_cit = main_obj.find(L"lockdown_functions");
+			auto ticks_in_day_cit = main_obj.find(L"ticks_in_day");
+
+			if(ticks_in_day_cit == main_obj.end())
+				return last_error = "Missing ticks_in_day field", false;
+
+			if (town_cit == main_obj.end())
+				return last_error = "Missing town info", false;
+			if(!town_cit->second->IsArray())
+				return last_error = "Town info is not an object", false;
+
+			auto& town_array = town_cit->second->AsArray();
+			size_t town_id = 0;
+			for (auto& obj : town_array) {
+				if (!obj->IsObject()) {
+					warning_list += "Town info element " + std::to_string(town_id) + " is not an object\n";
+					town_id++;
+					continue;
 				}
-				else {
-					warning_list += "No explicit data for amount of " + enum_name + "s count\n";
-					population[cur_age] = 0;
+				auto& obj_ref = obj->AsObject();
+				auto age_cit = obj_ref.find(L"age");
+				auto track_cit = obj_ref.find(L"track");
+				auto special_track_cit = obj_ref.find(L"special_track");
+				
+				if (age_cit == obj_ref.end() || track_cit == obj_ref.end() || special_track_cit == obj_ref.end()) {
+					warning_list += "Town info fields \"age\", \"track\", \"special_track\" are missing at line " + std::to_string(town_id) + "\n";
+					town_id++;
+					continue;
 				}
+
+				if (!age_cit->second->IsString()) {
+					warning_list += "Town info (field \"age\") is not a string at" + std::to_string(town_id) + "\n";
+					town_id++;
+					continue;
+				}
+
+				if (!track_cit->second->IsString()) {
+					warning_list += "Town info (field \"track\") is not a string at" + std::to_string(town_id) + "\n";
+					town_id++;
+					continue;
+				}
+
+				if (!special_track_cit->second->IsString()) {
+					warning_list += "Town info (field \"special_track\") is not a string at" + std::to_string(town_id) + "\n";
+					town_id++;
+					continue;
+				}
+
+				auto& age_ref = age_cit->second->AsString();
+				auto& track_ref = track_cit->second->AsString();
+				auto& special_track_ref = special_track_cit->second->AsString();
+
+				auto age_str = std::string(age_ref.begin(), age_ref.end());
+
+				auto age_type = magic_enum::enum_cast<mpiss::age_type>(age_str);
+				if (!age_type.has_value()) {
+					warning_list += "Town info (field \"age\") contains a non-enum value(" + age_str + ") at " + std::to_string(town_id) + "\n";
+					town_id++;
+					continue;
+				}
+
+				mpiss::dynamic_shedule_list shedule_list({});
+
+				auto reg_shedule_list = track_read(std::string(track_ref.begin(), track_ref.end()));
+				auto spec_shedule_list = track_read(std::string(special_track_ref.begin(), special_track_ref.end()));
+
+				update_maximal_tickets(reg_shedule_list, total_rooms_used);
+				update_maximal_tickets(spec_shedule_list, total_rooms_used);
+
+				shedule_list.shedules.push_back(reg_shedule_list);
+				shedule_list.shedules.push_back(spec_shedule_list);
+				
+				population[(size_t)age_type.value()]++;
+
+				cells_tracks.push_back({ age_type.value(), shedule_list });
 			}
-			for (int cur_shedule = 0; cur_shedule < mpiss::shedule_enum_size; cur_shedule++) {
-				std::string enum_name = magic_enum::enum_name<mpiss::shedule_place>((mpiss::shedule_place)cur_shedule).data();
-				std::wstring l_enum_name = std::wstring(enum_name.begin(), enum_name.end());
-				auto it = rooms_cnt_obj.find(l_enum_name);
-				if (it != rooms_cnt_obj.end()) {
-					if (it->second->IsNumber())
-						rooms_count[cur_shedule] = it->second->AsNumber();
-					else {
-						warning_list += "Not a numeric data for " + enum_name + "s count\n";
-						rooms_count[cur_shedule] = 0;
-					}
-				}
-				else {
-					warning_list += "No explicit data for amount of " + enum_name + "s count\n";
-					rooms_count[cur_shedule] = 0;
-				}
-			}
-			auto possible_tracks_it = main_obj.find(L"possible_main_tracks");
-			auto additional_tracks_it = main_obj.find(L"additional_tracks");
-
-			if (possible_tracks_it == main_obj.end())
-				warning_list += "No main tracks data.\n";
-			else if (!possible_tracks_it->second->IsObject())
-				warning_list += "Main tracks data object is not an object.\n";
-			else {
-				auto possible_tracks = possible_tracks_it->second->AsObject();
-				for (int cur_age = 0; cur_age < mpiss::age_enum_size; cur_age++) {
-					std::string enum_name = magic_enum::enum_name<mpiss::age_type>((mpiss::age_type)cur_age).data();
-					std::wstring l_enum_name = std::wstring(enum_name.begin(), enum_name.end());
-					auto it = possible_tracks.find(l_enum_name);
-					if (it != possible_tracks.end()) {
-						if (it->second->IsObject()) {
-							auto possible_tracks_for_cur_age = it->second->AsObject();
-							for (auto& key : possible_tracks_for_cur_age) {
-								if (!is_number(key.first)) {
-									warning_list += "Track data contains non-numered track in " + enum_name + "\n";
-									continue;
-								}
-								else {
-									auto key_name = std::to_string(std::stol(key.first));
-									if (!key.second->IsObject()) {
-										warning_list += "Track data is not an object in " + enum_name + ":" + key_name + "\n";
-										continue;
-									}
-									auto track_data = key.second->AsObject();
-									auto prob_it = track_data.find(L"prob");
-									auto track_it = track_data.find(L"track");
-									auto length_it = track_data.find(L"length");
-									auto pos_rand_it = track_data.find(L"pos_rand");
-									if (prob_it == track_data.end() ||
-										track_it == track_data.end() ||
-										length_it == track_data.end() ||
-										pos_rand_it == track_data.end()) {
-										warning_list += "Missing one or more track data fields at " + enum_name + ":" + key_name + "\n";
-										continue;
-									}
-
-									std::vector<mpiss::shedule_ticket> extracted_shedule_data;
-									double prob = 0;
-
-									if (prob_it->second->IsNumber())
-										prob = prob_it->second->AsNumber();
-									else
-										warning_list += "Implicit probability (\"prob\" field) cast to zero was performed (type mismatch at " + enum_name + ":" + key_name + ")\n";
-									if (track_it->second->IsString()) {
-										auto track_string = track_it->second->AsString();
-										for (auto& ch : track_string) {
-											mpiss::shedule_place sh_place = mpiss::shedule_place::null;
-											switch ((char)ch) {
-											case 'H': sh_place = mpiss::shedule_place::home; break;
-											case 'W': sh_place = mpiss::shedule_place::work; break;
-											case 'T': sh_place = mpiss::shedule_place::transport; break;
-											case 'M': sh_place = mpiss::shedule_place::magazine; break;
-											case 'S': sh_place = mpiss::shedule_place::school; break;
-											}
-											if (sh_place == mpiss::shedule_place::null)
-												continue;
-											extracted_shedule_data.push_back(mpiss::shedule_ticket(sh_place, 0, 0, 0));
-										}
-										if (track_string.size() && extracted_shedule_data.empty()) {
-											warning_list += "No correct track data at " + enum_name + ":" + key_name + "\n";
-											continue;
-										}
-										if (!(length_it->second->IsArray() && pos_rand_it->second->IsArray())) {
-											warning_list += "Length/Pos rand data type is not an array at " + enum_name + ":" + key_name + "\n";
-											continue;
-										}
-										auto length_array = length_it->second->AsArray();
-										auto pos_rand_array = length_it->second->AsArray();
-										if (length_array.size() != pos_rand_array.size() || length_array.size() != extracted_shedule_data.size()) {
-											warning_list += "Size mismatch of \"track\", \"length\" and \"pos_rand\" at " + enum_name + ":" + key_name + "\n";
-											continue;
-										}
-										for (size_t i = 0; i < extracted_shedule_data.size(); i++) {
-											if (!length_array[i]->IsNumber() || !pos_rand_array[i]->IsNumber()) {
-												warning_list += "\"length\" or \"pos_rand\" contain non-numeric values in the arrays at " + enum_name + ":" + key_name + "\n";
-												continue;
-											}
-											extracted_shedule_data[i].len = length_array[i]->AsNumber();
-											extracted_shedule_data[i].n_disp = pos_rand_array[i]->AsNumber();
-										}
-
-										auto main_tracks_it = main_tracks.find((mpiss::age_type)cur_age);
-										if (main_tracks_it == main_tracks.end())
-											main_tracks[(mpiss::age_type)cur_age] = std::vector<std::pair<double, mpiss::dynamic_shedule_list>>();
-										main_tracks_it->second.push_back({ prob,mpiss::dynamic_shedule_list(std::vector<std::vector<mpiss::shedule_ticket>>(1,extracted_shedule_data)) });
-									}
-									else
-										warning_list += "Track is not a string (type mismatch at " + enum_name + ":" + key_name + ")\n";
-
-								}
-							}
-						}
-						else 
-							warning_list += "Track data object is not an object at: " + enum_name + "\n";
-					}
-					else 
-						warning_list += "No explicit track data for  " + enum_name + "s\n";
-				}
-			}
-
-			if (additional_tracks_it != main_obj.end() && !additional_tracks_it->second->IsObject())
-				warning_list += "Additional tracks are present, yet are not an object.\n";
-			else {
-				auto additional_tracks = additional_tracks_it->second->AsObject();
-				/// TODO: duplicate code above to work on additional_tracks
-			}
-			/// TODO: add map_functions and switch_functions here
 		}
 		else
 			return last_error = "Loading failed: not an object.", false;
+
+		for (int i = 0; i < mpiss::shedule_enum_size; i++)
+			rooms_count[i] = total_rooms_used[i];
+
+		return true;
+	}
+
+	mpiss::town* create_town() {
+
 	}
 };
 
 int main() {
 	std::ios_base::sync_with_stdio(false); 
+	town_builder t_buidler;
+	decltype(MOFD(L"")) files;
+	do {
+		files = MOFD(L"Get town info file\n");
+	} while (files.empty());
+
+	t_buidler.info_filename = files[0];
+
+	if (!t_buidler.load()) {
+		std::cout << t_buidler.last_error << std::endl;
+	}
+	std::cout << t_buidler.warning_list << std::endl;
 
 	remove("output.csv");
 	constexpr size_t bufsize = 1024 * 1024;
@@ -200,17 +260,12 @@ int main() {
 	constexpr size_t N = 50000;
 
 	constexpr double Tn = 21, Ph = 0.99, Pimm = (Ph / Tn), Pdead_or_imm = ((1.f - Ph) / Tn) + Pimm;
-	auto vec = std::vector<mpiss::single_prob_branch>{
-		mpiss::single_prob_branch({}),
-		mpiss::single_prob_branch({
+	auto sing_prob_branch = mpiss::single_prob_branch({
 			{mpiss::disease_state::immune, Pimm},
 			{mpiss::disease_state::dead, Pdead_or_imm},
 			{mpiss::disease_state::hidden_nonspreading, 1}
-		}),
-		mpiss::single_prob_branch({}),
-		mpiss::single_prob_branch({}),
-		mpiss::single_prob_branch({})
-	};
+		});
+	auto vec = std::vector<mpiss::single_prob_branch>(mpiss::state_enum_size, sing_prob_branch);
 	auto dp = new mpiss::probability_disease_progress(
 		std::vector<decltype(vec)>(mpiss::age_enum_size, vec)
 	);

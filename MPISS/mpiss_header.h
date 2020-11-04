@@ -4,7 +4,7 @@
 
 #include "multidimentional_point.h"
 #include "magic_enum.hpp"
-#include "matrix.h"
+//#include "matrix.h"
 
 #include <list>
 #include <iostream>
@@ -37,6 +37,16 @@ namespace mpiss {
 	}
 	double erand() {
 		return __utils::__gr.gen() / (double(0xFFFFFFFFu));
+	}
+
+	template<typename b_str_type>
+	inline std::vector<std::basic_string<b_str_type>> split(const std::basic_string<b_str_type>& s, char delim) {
+		std::stringstream ss(s);
+		std::basic_string<b_str_type> item;
+		std::vector<std::basic_string<b_str_type>> elems;
+		while (std::getline(ss, item, delim)) 
+			elems.push_back(std::move(item));
+		return std::move(elems);
 	}
 
 	enum class age_type {
