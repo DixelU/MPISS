@@ -68,6 +68,8 @@ struct town_builder {
 	size_t population[mpiss::age_enum_size];
 	size_t rooms_count[mpiss::shedule_enum_size]; 
 
+		exprtk_wrapper lockdown_func[mpiss::age_enum_size];
+
 	size_t ticks_in_day = 1;
 	std::vector<std::pair<mpiss::age_type, mpiss::dynamic_shedule_list>> cells_tracks;
 
@@ -147,13 +149,15 @@ struct town_builder {
 			auto lockdown_functions_cit = main_obj.find(L"lockdown_functions");
 			auto ticks_in_day_cit = main_obj.find(L"ticks_in_day");
 
-			if(ticks_in_day_cit == main_obj.end())
-				return last_error = "Missing ticks_in_day field", false;
+			if(ticks_in_day_cit == main_obj.end() || ticks_in_day_cit->second->IsNumber())
+				return last_error = "ticks_in_day field parse error (missing/wrong type)", false;
+
+			ticks_in_day = ticks_in_day_cit->second->AsNumber();
 
 			if (town_cit == main_obj.end())
 				return last_error = "Missing town info", false;
 			if(!town_cit->second->IsArray())
-				return last_error = "Town info is not an object", false;
+								return last_error = "Town info is not an object", false;
 
 			auto& town_array = town_cit->second->AsArray();
 			size_t town_id = 0;
@@ -220,6 +224,20 @@ struct town_builder {
 
 				cells_tracks.push_back({ age_type.value(), shedule_list });
 			}
+
+			if(lockdown_functions_cit != main_obj.end() && lockdown_functions_cit->second->IsObject()){
+				auto lockdown_functions = lockdown_functions_cit->second->AsObject();
+				for(int i=0;i<=mpiss::age_enum_size;i++){
+					auto name = magic_enum::enum_name<mpiss::age_type>((mpiss::age_type)i);
+					auto value_cit = lockdown_functions[""]
+
+					if(i!=mpiss::age_enum_size){
+						lockdown_func[i].compile()
+					}
+				}
+			}
+			else
+				warning_list += "No lockdown data? That town is doomed then...\n";
 		}
 		else
 			return last_error = "Loading failed: not an object.", false;
