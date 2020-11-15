@@ -2,6 +2,7 @@
 #include <Windows.h>
 #include <algorithm>
 
+#include <optional>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -15,7 +16,56 @@
 
 #include "exprtk_wrapper.h"
 
-inline std::vector<std::wstring> MOFD(const wchar_t* Title) {
+mpiss::probability_disease_progress regular_progress_builder(){
+	mpiss::single_prob_branch f_h({});
+	mpiss::single_prob_branch f_hns({
+		{mpiss::disease_state::hidden_spreading, mpiss::erand() * 0.1},
+		{mpiss::disease_state::spreading_immune,  mpiss::erand() * 0.1},
+		{mpiss::disease_state::immune,  mpiss::erand() * 0.1},
+		{mpiss::disease_state::healthy, mpiss::erand() * 0.1}
+		});
+	mpiss::single_prob_branch f_hs({
+		{mpiss::disease_state::active_spread,  mpiss::erand() * 0.1},
+		{mpiss::disease_state::spreading_immune,  mpiss::erand() * 0.1},
+		{mpiss::disease_state::immune,  mpiss::erand() * 0.1},
+		{mpiss::disease_state::healthy,  mpiss::erand() * 0.1},
+		{mpiss::disease_state::dead,  mpiss::erand() * 0.1}
+		});
+	mpiss::single_prob_branch f_as({
+		{mpiss::disease_state::spreading_immune,  mpiss::erand() * 0.1},
+		{mpiss::disease_state::immune,  mpiss::erand() * 0.1},
+		{mpiss::disease_state::healthy,  mpiss::erand() * 0.1},
+		{mpiss::disease_state::dead,  mpiss::erand() * 0.1}
+		});
+	mpiss::single_prob_branch f_si({
+		{mpiss::disease_state::immune,  mpiss::erand() * 0.1},
+		{mpiss::disease_state::healthy,  mpiss::erand() * 0.1},
+		{mpiss::disease_state::dead,  mpiss::erand() * 0.1}
+		});
+	mpiss::single_prob_branch f_i({
+		{mpiss::disease_state::healthy,  mpiss::erand() * 0.1}
+		});
+	auto vec = std::vector<mpiss::single_prob_branch>{ f_h,f_hns,f_hs,f_as,f_si,f_i };
+	return mpiss::probability_disease_progress(
+		std::vector<decltype(vec)>(mpiss::age_enum_size, vec)
+	);
+}
+
+inline std::vector<double*> get_all_parameters(mpiss::probability_disease_progress& pdp, point<mpiss::state_enum_size>& state_spread_modifier) {
+	std::vector<double*> vec;
+	for (auto& aged_pdp : pdp.data) {
+		for (auto& stated_pdp : aged_pdp) {
+			for (auto& branch : stated_pdp.branches) {
+				vec.push_back(&branch.second);
+			}
+		}
+	}
+	for (auto& modifier : state_spread_modifier.pt) 
+		vec.push_back(&modifier);
+	return vec;
+}
+
+inline std::vector<std::wstring> MOFD(const wchar_t* Title, const wchar_t* Filter) {
 	OPENFILENAME ofn;       // common dialog box structure
 	wchar_t szFile[50000];       // buffer for file name
 	std::vector<std::wstring> InpLinks;
@@ -26,7 +76,7 @@ inline std::vector<std::wstring> MOFD(const wchar_t* Title) {
 	ofn.lpstrFile = szFile;
 	ofn.lpstrFile[0] = '\0';
 	ofn.nMaxFile = sizeof(szFile);
-	ofn.lpstrFilter = L"JSON Files(*.json)\0*.json\0";
+	ofn.lpstrFilter = Filter;
 	ofn.nFilterIndex = 1;
 	ofn.lpstrFileTitle = NULL;
 	ofn.lpstrTitle = Title;
@@ -61,17 +111,29 @@ inline std::vector<std::wstring> MOFD(const wchar_t* Title) {
 }
 using mpiss::__utils::is_number;
 
+struct town_manipulator {
+
+};
+
 struct town_builder {
 	std::wstring info_filename = L"";
 	std::string last_error = "";
 	std::string warning_list = "";
 	size_t population[mpiss::age_enum_size];
-	size_t rooms_count[mpiss::shedule_enum_size]; 
+	size_t rooms_count[mpiss::shedule_enum_size];
 
-		exprtk_wrapper lockdown_func[mpiss::age_enum_size];
+	point<mpiss::shedule_enum_size>* contact_probabilities = new point<mpiss::shedule_enum_size>;
+
+	point<mpiss::state_enum_size>* state_spread_modifier = new point<mpiss::state_enum_size>;
+	mpiss::probability_disease_progress* pdp;
+	double* time = new double(0);
+
+	std::vector<exprtk_wrapper*> lockdown_func;
 
 	size_t ticks_in_day = 1;
 	std::vector<std::pair<mpiss::age_type, mpiss::dynamic_shedule_list>> cells_tracks;
+
+	mpiss::town* built_town;
 
 	template<typename b_str_type>
 	inline static auto track_read(std::basic_string<b_str_type> str) {
@@ -125,7 +187,10 @@ struct town_builder {
 		return std::move(shed_ticket);
 	}
 
-	inline static void update_maximal_tickets( const std::vector<mpiss::shedule_ticket>& new_shedule_list, std::array<size_t, mpiss::shedule_enum_size>& total_rooms_used ) {
+	inline static void update_maximal_tickets( 
+		const std::vector<mpiss::shedule_ticket>& new_shedule_list, 
+		std::array<size_t, mpiss::shedule_enum_size>& total_rooms_used 
+	) {
 		for (const auto& ticket : new_shedule_list) 
 			total_rooms_used[(size_t)ticket.type] = std::max(total_rooms_used[(size_t)ticket.type], ticket.id);
 	}
@@ -139,7 +204,8 @@ struct town_builder {
 		for (int i = 0; i < mpiss::age_enum_size; i++)
 			population[i] = 0;
 		for (int i = 0; i < mpiss::shedule_enum_size; i++)
-			rooms_count[i] = 0;
+			rooms_count[i] = total_rooms_used[i] = 0;
+		pdp = new mpiss::probability_disease_progress(regular_progress_builder());
 		auto JObject = JSON::Parse(json.c_str());
 		if (!JObject)
 			return last_error = "JObject - is null", false;
@@ -149,7 +215,7 @@ struct town_builder {
 			auto lockdown_functions_cit = main_obj.find(L"lockdown_functions");
 			auto ticks_in_day_cit = main_obj.find(L"ticks_in_day");
 
-			if(ticks_in_day_cit == main_obj.end() || ticks_in_day_cit->second->IsNumber())
+			if(ticks_in_day_cit == main_obj.end() || !ticks_in_day_cit->second->IsNumber())
 				return last_error = "ticks_in_day field parse error (missing/wrong type)", false;
 
 			ticks_in_day = ticks_in_day_cit->second->AsNumber();
@@ -229,10 +295,58 @@ struct town_builder {
 				auto lockdown_functions = lockdown_functions_cit->second->AsObject();
 				for(int i=0;i<=mpiss::age_enum_size;i++){
 					auto name = magic_enum::enum_name<mpiss::age_type>((mpiss::age_type)i);
-					auto value_cit = lockdown_functions[""]
-
+					auto value_cit = lockdown_functions.find(std::wstring(name.begin(),name.end()));
+					if (i != mpiss::age_enum_size) {
+						lockdown_func.push_back(new exprtk_wrapper({ { "t",*time } }));
+					}
+					if (value_cit == lockdown_functions.end() || value_cit->second->IsString()) {
+						if (i != mpiss::age_enum_size) {
+							if (lockdown_func[i])
+								delete lockdown_func[i];
+							lockdown_func[i] = nullptr;
+						}
+						continue;
+					}
+					auto str = value_cit->second->AsString();
 					if(i!=mpiss::age_enum_size){
-						lockdown_func[i].compile()
+						auto ans = lockdown_func[i]->compile(std::string(str.begin(),str.end()));
+						if (!ans) {
+							auto vec_of_errors = lockdown_func[i]->get_errors();
+							for (auto& [err_line, err_col, err_name, err_desc] : vec_of_errors) {
+								warning_list += "Error while compilation of " +
+									std::string(str.begin(), str.end()) +
+									" lockdown functions at " +
+									std::to_string(err_line) + ":" +
+									std::to_string(err_col) + " " +
+									err_name + ": " + err_desc + "\n";
+							}
+							if (i != mpiss::age_enum_size) {
+								if (lockdown_func[i])
+									delete lockdown_func[i];
+								lockdown_func[i] = nullptr;
+							}
+						}
+					}
+					else {
+						for (int j = 0; j < mpiss::age_enum_size; j++) {
+							auto ans = lockdown_func[i]->compile(std::string(str.begin(), str.end()));
+							if (!ans) {
+								auto vec_of_errors = lockdown_func[i]->get_errors();
+								for (auto& [err_line, err_col, err_name, err_desc] : vec_of_errors) {
+									warning_list += "Error while compilation of " +
+										std::string(str.begin(), str.end()) +
+										" lockdown functions at " +
+										std::to_string(err_line) + ":" +
+										std::to_string(err_col) + " " +
+										err_name + ": " + err_desc + "\n";
+								}
+								if (i != mpiss::age_enum_size) {
+									if (lockdown_func[i])
+										delete lockdown_func[i];
+									lockdown_func[i] = nullptr;
+								}
+							}
+						}
 					}
 				}
 			}
@@ -244,116 +358,65 @@ struct town_builder {
 
 		for (int i = 0; i < mpiss::shedule_enum_size; i++)
 			rooms_count[i] = total_rooms_used[i];
-
 		return true;
 	}
 
 	mpiss::town* create_town() {
-
+		mpiss::cemetery* cemetury = new mpiss::cemetery();
+		std::unordered_map<mpiss::shedule_place, std::vector<mpiss::room>> places;
+		for (auto& [age, shedules] : cells_tracks) {
+			auto& first_shedule = shedules.operator*().front();
+			for (auto& track : shedules.shedules) {
+				for (auto& shedule : track) {
+					auto first_place = places.find(shedule.type);
+					if (first_place == places.end()) {
+						places[shedule.type] = std::vector<mpiss::room>();
+						first_place = places.find(shedule.type);
+					}
+					if (shedule.id >= first_place->second.size())
+						first_place->second.resize(
+							shedule.id + 1,
+							mpiss::room(
+								&((*contact_probabilities)[(size_t)shedule.type]), state_spread_modifier, cemetury)
+						);
+				}
+			}
+			auto& first_place = places[first_shedule.type];
+			first_place[first_shedule.id].cells.push_back(new mpiss::sheduled_cell(pdp, shedules, age));
+		}
+		return new mpiss::town(cemetury, places);
 	}
 };
 
 int main() {
 	std::ios_base::sync_with_stdio(false); 
-	town_builder t_buidler;
-	decltype(MOFD(L"")) files;
+	town_builder t_builder;
+	decltype(MOFD(L"", L"JSON Files(*.json)\0*.json\0")) files;
 	do {
-		files = MOFD(L"Get town info file\n");
+		files = MOFD(L"Get town info file\n", L"JSON Files(*.json)\0*.json\0");
 	} while (files.empty());
 
-	t_buidler.info_filename = files[0];
+	t_builder.info_filename = files[0];
 
-	if (!t_buidler.load()) {
-		std::cout << t_buidler.last_error << std::endl;
+	if (!t_builder.load()) {
+		std::cout << t_builder.last_error << std::endl;
 	}
-	std::cout << t_buidler.warning_list << std::endl;
+	std::cout << t_builder.warning_list << std::endl;
 
-	remove("output.csv");
-	constexpr size_t bufsize = 1024 * 1024;
-	char* buf = new char[bufsize];
-	std::ofstream fout("output.csv");
-	fout.rdbuf()->pubsetbuf(buf, bufsize);
-
-	auto cem = new mpiss::cemetery();
-	constexpr size_t N = 50000;
-
-	constexpr double Tn = 21, Ph = 0.99, Pimm = (Ph / Tn), Pdead_or_imm = ((1.f - Ph) / Tn) + Pimm;
-	auto sing_prob_branch = mpiss::single_prob_branch({
-			{mpiss::disease_state::immune, Pimm},
-			{mpiss::disease_state::dead, Pdead_or_imm},
-			{mpiss::disease_state::hidden_nonspreading, 1}
-		});
-	auto vec = std::vector<mpiss::single_prob_branch>(mpiss::state_enum_size, sing_prob_branch);
-	auto dp = new mpiss::probability_disease_progress(
-		std::vector<decltype(vec)>(mpiss::age_enum_size, vec)
-	);
-	auto state_spread_modifier = new point<mpiss::state_enum_size>{ 0.0, 1., 1., 1., 1., 0., 0. };
-
-	auto contact_prob = new double(2./Tn);//alpha
-
-	mpiss::room r(contact_prob, state_spread_modifier, cem);
-	for (int i = 0; i < N; i++) 
-		r.cells.push_back(new mpiss::cell(dp));
-
-	size_t cnt = 0;
-	std::string temp = "";
-	const std::string delim = ";";
-
-	constexpr size_t iterations_count = 300, cycle_count = 50;
-	constexpr size_t amount_of_sick = 100;
-	std::vector<std::tuple<double, double, double, double>> count1(iterations_count, std::tuple<double, double, double, double>(0,0,0,0));
-	std::vector<std::tuple<double, double, double, double>> count2(iterations_count, std::tuple<double, double, double, double>(0,0,0,0)); 
-
-	std::vector<decltype(count1)> output(cycle_count, count1);
+	auto ptr = t_builder.create_town();
 	
-	for (int i = 0; i < amount_of_sick; i++)
-		r.cells[i]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
+	decltype(MOFD(L"", L"Text Files(*.txt)\0*.txt\0")) params;
+	do {
+		params = MOFD(L"Get disease parameters\n");
+	} while (params.empty());
 
-	for (size_t i = 0; i < cycle_count; i++) {
-		for (size_t c = 0; c < iterations_count; c++) {
-			r.make_iteration();
-			/*
-			std::get<0>(count2[c]) += std::pow(r.counters[(size_t)mpiss::disease_state::healthy],2);
-			std::get<1>(count2[c]) += std::pow(r.get_sick_count(),2);
-			std::get<2>(count2[c]) += std::pow(r.counters[(size_t)mpiss::disease_state::immune],2);
-			std::get<3>(count2[c]) += std::pow(cem->deads.size(),2);
-			*/
+	std::ifstream fin(params[0]);
 
-			std::get<0>(output[i][c]) += r.counters[(size_t)mpiss::disease_state::healthy];
-			std::get<1>(output[i][c]) += r.get_sick_count();
-			std::get<2>(output[i][c]) += r.counters[(size_t)mpiss::disease_state::immune];
-			std::get<3>(output[i][c]) += cem->deads.size();
+	auto vals = get_all_parameters(*t_builder.pdp, *t_builder.state_spread_modifier);
 
-			/*
-			std::get<0>(count1[c]) += r.counters[(size_t)mpiss::disease_state::healthy];
-			std::get<1>(count1[c]) += r.get_sick_count();
-			std::get<2>(count1[c]) += r.counters[(size_t)mpiss::disease_state::immune];
-			std::get<3>(count1[c]) += cem->deads.size();
-			*/
-			//std::cout << "Iteration " << c << std::endl;
-		}
-		for (auto& t : cem->deads) 
-			r.cells.push_back(t);
-		//std::cout << "Deads reset" << std::endl;
-		for (auto& t : r.cells) {
-			t->time_since_contact = -1;
-			t->value = mpiss::erand();
-			t->cur_disease_state = t->next_disease_state = mpiss::disease_state::healthy;
-		}
-		
-		for (int i = 0; i < amount_of_sick; i++)
-			r.cells[i]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
-
-		cem->deads.clear();
-		std::cout << "Loop " << i << std::endl;
+	for (auto ptr : vals) {
+		fin >> *ptr;
 	}
-	for (size_t c = 0; c < iterations_count; c++) {
-		for (auto& v : output) 
-			temp += std::to_string((size_t)(std::get<1>(v[c]))) + ";";
-		temp += "\n";
-		fout << temp;
-		std::cout << temp;
-		temp.clear();
-		cnt++;
-	}
+
+	return 0;
 }

@@ -7,7 +7,7 @@
 #include <array>
 #include <vector>
 
-struct exprtk_wrapper{
+class exprtk_wrapper{
 	typedef double T;
 	typedef exprtk::symbol_table<T> symbol_table_t;
 	typedef exprtk::expression<T>     expression_t;
@@ -18,6 +18,7 @@ struct exprtk_wrapper{
 	symbol_table_t symbol_table;
 	expression_t expression;
 	parser_t parser;
+public:
 	exprtk_wrapper(std::vector<std::pair<std::string, double&>> ext_variables) {
 		for (auto& var : ext_variables) {
 			auto& [str, val] = var;
@@ -28,6 +29,7 @@ struct exprtk_wrapper{
 	bool compile(const std::string& expression_string) {
 		return parser.compile(expression_string, expression);
 	}
+	/* line , col, error name, description */
 	auto get_errors() {
 		std::vector<std::tuple<size_t, size_t, std::string, std::string>> errors;
 		size_t errors_count = parser.error_count();

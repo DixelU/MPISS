@@ -1,13 +1,16 @@
 #pragma once
-#include <string>
-#include <vector>
-#include <iostream>
-#include <utility>
-#include <set>
+#include <Windows.h>
 #include <algorithm>
+#include <iostream>
+#include <fstream>
+#include <sstream>
 #include <iomanip>
-
-#include "multidimentional_point.h"
+#include <utility>
+#include <vector>
+#include <string>
+#include <queue>
+#include <cmath>
+#include <map>
 
 using line = std::vector<double>;
 constexpr double EPSILON = 1.0e-10; //difference epsilon.
@@ -19,6 +22,7 @@ public:
 	matrix(size_t size);
 	matrix(const matrix& rightMatrix);
 	matrix(const std::initializer_list<std::vector<double>>& list);
+	matrix(const std::vector<line>& list);
 	static matrix E_matrix(size_t size);
 	static matrix Diagonal(const line& diag_values);
 	inline ~matrix() {};
@@ -33,6 +37,11 @@ public:
 	inline const double& at(size_t x, size_t y) const;
 	inline line& operator[](size_t rows);
 	inline const line& operator[](size_t rows) const;
+
+	inline matrix get_row(size_t row) const;
+	inline matrix get_col(size_t col) const;
+	inline matrix set_row(size_t row, const matrix& mx_row);
+	inline matrix set_col(size_t col, const matrix& mx_col);
 
 	inline matrix& operator=(const matrix& rightMatrix);
 	inline matrix operator*(double a) const;
@@ -50,6 +59,13 @@ public:
 	friend inline std::ostream& operator<<(std::ostream& out, const matrix& rightMatrix);
 	friend inline std::istream& operator>>(std::istream& in, matrix& rightMatrix);
 	friend inline matrix operator*(double a, const matrix& rightMatrix);
+
+	inline matrix minor_matrix(const size_t& x_minor, const size_t& y_minor) const;
+
+	inline static matrix cross_prod(const matrix& points_in_matrix);
+
+	inline bool operator<(const matrix& comparation_m) const;
+	inline bool operator<=(const matrix& comparation_m) const;
 private:
 	std::vector<line> _matrix;
 	double utilization = 0;
@@ -74,6 +90,11 @@ inline matrix::matrix(const std::initializer_list<std::vector<double>>& list) {
 		_matrix.push_back(line);
 	}
 }
+matrix::matrix(const std::vector<line>& list) {
+	for (auto&& line : list) {
+		_matrix.push_back(line);
+	}
+}
 
 matrix matrix::E_matrix(size_t size) {
 	matrix unitMatrix(size);
@@ -92,13 +113,11 @@ matrix matrix::Diagonal(const line& diagValues) {
 inline size_t matrix::rows() const {
 	return _matrix.size();
 }
-
 inline size_t matrix::cols() const {
 	if (_matrix.size())
 		return _matrix.front().size();
 	return 0;
 }
-
 inline std::pair<size_t, size_t> matrix::size() const {
 	return { rows(),cols() };
 }
@@ -219,10 +238,10 @@ inline matrix matrix::operator^(int64_t degree) const {
 }
 
 inline matrix matrix::transpose() const {
-	matrix transposedMatix(rows(), cols());
+	matrix transposedMatix(cols(), rows());
 	for (size_t y = 0; y < rows(); y++) {
 		for (size_t x = 0; x < cols(); x++) {
-			transposedMatix[y][x] = _matrix[x][y];
+			transposedMatix[x][y] = _matrix[y][x];
 		}
 	}
 	return transposedMatix;
@@ -319,6 +338,79 @@ inline matrix matrix::inverse() const {
 	return finalMatrix;
 }
 
+inline matrix matrix::minor_matrix(const size_t& x_minor, const size_t& y_minor) const {
+	auto minor_index = [](size_t x, size_t y, size_t minor_x, size_t minor_y) -> std::pair<int64_t, int64_t> {
+		if (x == minor_x)
+			return { -1,-1 };
+		if (y == minor_y)
+			return { -1,-1 };
+		if (x > minor_x)
+			x -= 1;
+		if (y > minor_y)
+			y -= 1;
+		return { x,y };
+	};
+	matrix M;
+	M.resize(rows() - 1, cols() - 1);
+	for (size_t y = 0; y < rows(); y++) {
+		for (size_t x = 0; x < cols(); x++) {
+			auto mxy = minor_index(x, y, x_minor, y_minor);
+			int64_t mx = mxy.first;
+			int64_t my = mxy.second;
+			if (mx < 0 || my < 0)
+				continue;
+			M.at(mx, my) = at(x, y);
+		}
+	}
+	return M;
+}
+
+inline matrix matrix::cross_prod(const matrix& points_in_matrix) {
+	size_t dims = points_in_matrix.rows(); /* ex: [1,2] */
+	if (points_in_matrix.rows() + 1 != points_in_matrix.cols())
+		return {};
+	if (dims > 0) {
+		matrix answer;
+		matrix mx = points_in_matrix;
+		answer.resize(1, dims + 1);
+		mx.resize(dims + 1, dims + 1);
+		for (size_t i = dims; i >= 1; i--)
+			mx[i] = mx[i - 1];
+		for (size_t i = 0; i < dims+1; i++)
+			answer.at(i, 0) = (mx.minor_matrix(i, 0).determinant() * ((i & 1) ? (1.) : (-1.)));
+		return answer;
+	}
+	else
+		return {};
+}
+
+inline matrix matrix::get_row(size_t row) const {
+	return matrix({ this->operator[](row) });
+}
+
+inline matrix matrix::get_col(size_t col) const {
+	matrix new_mx;
+	new_mx.resize(this->rows(), 1);
+	for (size_t i = 0; i < new_mx.rows(); i++)
+		new_mx[i][0] = at(col, i);
+	return new_mx;
+}
+
+inline matrix matrix::set_row(size_t row, const matrix& mx_row) {
+	if (cols() != mx_row.cols() || row >= rows())
+		return *this;
+	_matrix[row] = mx_row[0];
+	return *this;
+}
+
+inline matrix matrix::set_col(size_t col, const matrix& mx_col) {
+	if (rows() != mx_col.rows() || col >= cols())
+		return *this;
+	for (size_t i = 0; i < mx_col.rows(); i++)
+		_matrix[i][0] = mx_col[i][0];
+	return *this;
+}
+
 inline matrix operator*(double number, const matrix& rightMatrix) {
 	return rightMatrix * number;
 }
@@ -335,6 +427,7 @@ inline bool matrix::operator==(const matrix& rightMatrix) const {
 	return true;
 }
 
+
 inline std::istream& operator>>(std::istream& in, matrix& rightMatrix) {
 	size_t y, x;
 	in >> y >> x;
@@ -348,10 +441,29 @@ inline std::istream& operator>>(std::istream& in, matrix& rightMatrix) {
 inline std::ostream& operator<<(std::ostream& out, const matrix& rightMatrix) {
 	for (auto&& line : rightMatrix._matrix) {
 		for (auto&& digit : line) {
-			out << std::setprecision(2) << digit << "\t";
+			out << std::setprecision(6) << std::setw(10) << digit;
 		}
 		out << '\n';
 	}
 	return out;
 }
 
+inline bool matrix::operator<(const matrix& comparation_m) const {
+	if (rows() != comparation_m.rows() || cols() != comparation_m.cols())
+		throw std::runtime_error("matrix sizes mismatch on inequality comparison");
+	for (size_t y = 0; y < rows(); y++)
+		for (size_t x = 0; x < cols(); x++)
+			if (at(x, y) >= comparation_m.at(x, y))
+				return false;
+	return true;
+}
+
+inline bool matrix::operator<=(const matrix& comparation_m) const {
+	if (rows() != comparation_m.rows() || cols() != comparation_m.cols())
+		throw std::runtime_error("matrix sizes mismatch on inequality comparison");
+	for (size_t y = 0; y < rows(); y++)
+		for (size_t x = 0; x < cols(); x++)
+			if (at(x, y) > comparation_m.at(x, y))
+				return false;
+	return true;
+}

@@ -17,8 +17,8 @@ namespace mpiss {
 		std::unordered_map<shedule_place, std::vector<room>> places;
 		size_t counters[state_enum_size];
 
-		town(cemetery *cem, const std::unordered_map<shedule_place, std::vector<room>>& places): places(places) {
-
+		town(cemetery *cem, const std::unordered_map<shedule_place, std::vector<room>>& places): places(places), cem(cem) {
+			update_counters();
 		}
 		void reset() {
 			for (auto& dead : cem->deads) {

@@ -6,13 +6,15 @@
 
 namespace mpiss {
 	struct single_prob_branch {
-		std::vector<std::pair<mpiss::disease_state, float>> branches;
-		single_prob_branch(const std::vector<std::pair<mpiss::disease_state, float>>& branches):
+		std::vector<std::pair<mpiss::disease_state, double>> branches;
+		single_prob_branch(const std::vector<std::pair<mpiss::disease_state, double>>& branches):
 			branches(branches){}
 		inline mpiss::disease_state evalute_prob(double rnd, mpiss::disease_state cur_state) const {
-			for (const auto& ds : branches)
+			for (const auto& ds : branches) {
 				if (rnd < ds.second)
 					return ds.first;
+				rnd -= ds.second;
+			}
 			return cur_state;
 		}
 	};
@@ -24,7 +26,7 @@ namespace mpiss {
 			mpiss::age_type age_t,
 			mpiss::disease_state prev_state,
 			const int64_t& time_since_contact,
-			const float& val
+			const double& val
 		) const override {
 			return data[(size_t)age_t][(size_t)prev_state].evalute_prob(mpiss::erand(), prev_state);
 		}

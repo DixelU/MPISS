@@ -38,7 +38,7 @@ namespace mpiss {
 			mpiss::age_type age_t, 
 			mpiss::disease_state prev_state, 
 			const int64_t& time_since_contact,
-			const float& val
+			const double& val
 		) const override {
 			return data[(size_t)age_t].update_disease_state(time_since_contact, val);
 		}

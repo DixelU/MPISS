@@ -81,7 +81,7 @@ namespace mpiss {
 			mpiss::age_type age_t,
 			mpiss::disease_state prev_state,
 			const int64_t& time_since_contact,
-			const float& val
+			const double& val
 		) const {
 			return prev_state;
 		};
