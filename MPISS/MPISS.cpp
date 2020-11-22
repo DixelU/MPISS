@@ -540,12 +540,12 @@ int main() {
 	}
 
 	size_t reps = 100, iters=1000, initials=1;
-	/*std::cout << "Approximate repeats count: ";
+	std::cout << "Approximate repeats count: ";
 	std::cin >> reps;
 	std::cout << "Amount of iterations: ";
 	std::cin >> iters;
 	std::cout << "Amount of initially ill: ";
-	std::cin >> initials;*/
+	std::cin >> initials;
 	std::vector<std::pair<point<mpiss::state_enum_size>, point<mpiss::state_enum_size>>> result;
 
 	result = t_manip.start_simulation_with_current_parameters(reps, iters, initials);
