@@ -39,7 +39,7 @@ namespace mpiss {
 				if (rnd < *contact_probability) {
 					size_t rnd_id = erand() * cells.size();
 					auto rnd_it = cells.begin() + rnd_id;
-					if ((*rnd_it)->next_disease_state != (*rnd_it)->cur_disease_state)
+					if ((*rnd_it)->next_disease_state != mpiss::disease_state::healthy)
 						continue;
 					single_contact(it, rnd_it);
 				}

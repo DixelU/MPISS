@@ -13,9 +13,8 @@
 namespace mpiss {
 	struct town {
 		cemetery *cem;
-		size_t avg_counter[state_enum_size];
 		std::unordered_map<shedule_place, std::vector<room>> places;
-		size_t counters[state_enum_size];
+		point<state_enum_size> counters;
 
 		town(cemetery *cem, const std::unordered_map<shedule_place, std::vector<room>>& places): places(places), cem(cem) {
 			update_counters();
@@ -24,6 +23,7 @@ namespace mpiss {
 			for (auto& dead : cem->deads) {
 				dead->reset();
 				auto dead_sh = CAST_PSHEDULED(*dead);
+				(dead_sh->shedule).revert_all_overrides();
 				auto it = std::find_if(
 					(*(dead_sh->shedule)).begin(),
 					(*(dead_sh->shedule)).end(),
@@ -33,6 +33,7 @@ namespace mpiss {
 				);
 				places[shedule_place::home][it->id].cells.push_back(dead_sh);
 			}
+			cem->deads.clear();
 			for (auto& place_type : places) {
 				for (auto& single_place : place_type.second) {
 					for (auto& c_cell : single_place.cells) {
@@ -41,6 +42,7 @@ namespace mpiss {
 				}
 			}
 			move_cells();
+			update_counters();
 		}
 		void update_counters() {
 			for (int dis_st = 0; dis_st < state_enum_size; dis_st++) 
@@ -49,28 +51,31 @@ namespace mpiss {
 				for (auto& single_place : place_type.second) 
 					for (int dis_st = 0; dis_st < state_enum_size; dis_st++) 
 						counters[dis_st] += single_place.counters[dis_st];
+			counters[(size_t)mpiss::disease_state::dead] = cem->deads.size();
 		}
 		void move_cells() {
 			bool flag_back_move = false;
 			for (auto& place_type : places) {
 				for (auto& single_place : place_type.second) {
 					flag_back_move = false;
-					for (auto c_cell_it = single_place.cells.begin(); c_cell_it != single_place.cells.end() || flag_back_move; c_cell_it++) {
-						if (flag_back_move) {
-							flag_back_move = false;
-							c_cell_it--;
-						}
-						auto s_cell = CAST_PSHEDULED(*c_cell_it);
-						if (s_cell->cur_shedule != s_cell->prev_shedule) {
-							flag_back_move = true;
-							auto& shedule = (*s_cell->shedule)[s_cell->cur_shedule];
-							auto cell_ptr = (sheduled_cell*)single_place.remove_cell_without_destroying(c_cell_it - single_place.cells.begin());
+					for (int i = 0; i < single_place.cells.size();) {
+						auto s_cell = (mpiss::sheduled_cell*)single_place.cells[i];
+						if (s_cell->cur_shedule != s_cell->prev_shedule && (
+								(*s_cell->shedule)[s_cell->cur_shedule].type != (*s_cell->shedule)[s_cell->prev_shedule].type ||
+								(*s_cell->shedule)[s_cell->cur_shedule].id != (*s_cell->shedule)[s_cell->prev_shedule].id )) {
+
+							auto cell_ptr = (sheduled_cell*)single_place.remove_cell_without_destroying(i);
+
+							auto& shedule = (*cell_ptr->shedule)[cell_ptr->cur_shedule];
 							auto& place_type_ref = places[shedule.type];
 							double place_type_amount = place_type_ref.size();
 							auto place_room_id = shedule.get_rand_id();
-							place_room_id = std::clamp(place_room_id, 0., place_type_amount);
+							place_room_id = std::clamp(place_room_id, 0., place_type_amount-1);
+							cell_ptr->prev_shedule = cell_ptr->cur_shedule;
 							place_type_ref[(size_t)place_room_id].cells.push_back(cell_ptr);
 						}
+						else
+							i++;
 					}
 				}
 			}

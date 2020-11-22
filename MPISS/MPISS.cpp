@@ -7,9 +7,15 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <chrono>
+
+#include <thread>
+
+#include <boost/stacktrace.hpp>
 
 #include "mpiss_town.h"
 #include "probabiliy_disease_progress.h"
+#include "pooled_thread.h"
 
 #include "JSON/JSON.cpp"
 #include "JSON/JSONValue.cpp"
@@ -51,7 +57,11 @@ mpiss::probability_disease_progress regular_progress_builder(){
 	);
 }
 
-inline std::vector<double*> get_all_parameters(mpiss::probability_disease_progress& pdp, point<mpiss::state_enum_size>& state_spread_modifier) {
+inline std::vector<double*> get_all_parameters(
+	mpiss::probability_disease_progress& pdp,
+	point<mpiss::state_enum_size>& state_spread_modifier,
+	point<mpiss::shedule_enum_size>& contact_probabilities
+) {
 	std::vector<double*> vec;
 	for (auto& aged_pdp : pdp.data) {
 		for (auto& stated_pdp : aged_pdp) {
@@ -62,6 +72,8 @@ inline std::vector<double*> get_all_parameters(mpiss::probability_disease_progre
 	}
 	for (auto& modifier : state_spread_modifier.pt) 
 		vec.push_back(&modifier);
+	for (auto& prob : contact_probabilities.pt)
+		vec.push_back(&prob);
 	return vec;
 }
 
@@ -110,10 +122,6 @@ inline std::vector<std::wstring> MOFD(const wchar_t* Title, const wchar_t* Filte
 	return {};
 }
 using mpiss::__utils::is_number;
-
-struct town_manipulator {
-
-};
 
 struct town_builder {
 	std::wstring info_filename = L"";
@@ -177,7 +185,7 @@ struct town_builder {
 				singular_ticket.id = std::stol(ticket_sub_separated_data[1]);
 
 			if (ticket_sub_separated_data.size() > 2 && ticket_sub_separated_data[2].size())
-				singular_ticket.len = std::stol(ticket_sub_separated_data[2]);
+				singular_ticket.left = singular_ticket.len = std::stol(ticket_sub_separated_data[2]);
 
 			if (ticket_sub_separated_data.size() > 3 && ticket_sub_separated_data[3].size())
 				singular_ticket.n_disp = std::stod(ticket_sub_separated_data[3]);
@@ -388,35 +396,170 @@ struct town_builder {
 	}
 };
 
+
+struct town_manipulator {
+	town_builder t_builder;
+	std::vector<pooled_thread*> threads;
+
+	struct thread_data {
+		mpiss::town* town;
+		std::vector<std::vector<point<mpiss::state_enum_size>>> counters;
+	};
+
+	std::vector<std::pair<point<mpiss::state_enum_size>, point<mpiss::state_enum_size>>>
+		start_simulation_with_current_parameters(const size_t repeats, const size_t iters, const size_t initial_amount_of_hns) {
+
+		size_t amount_of_threads = std::max(1, int32_t(std::thread::hardware_concurrency()) - 1);
+		while (threads.size() < amount_of_threads) 
+			threads.push_back(new pooled_thread());
+
+		double_t repeats_per_thread = double_t(repeats) / amount_of_threads;
+		size_t repeats_per_thread_rounded_up = std::ceil(repeats_per_thread);
+		size_t fixed_repeats = repeats_per_thread_rounded_up * amount_of_threads;
+
+		auto automation_func = [&](void** ptr) {
+			auto t_ptr = *(thread_data**)ptr;
+			for (size_t rep = 0; rep < repeats_per_thread_rounded_up; rep++) {
+				//std::cout << "before\n";
+				mpiss::shedule_place first_not_empty_place = mpiss::shedule_place::null;
+				for (size_t i = 0; i < mpiss::shedule_enum_size; i++) {
+					if (t_ptr->town->places[(mpiss::shedule_place)i].size()) {
+						first_not_empty_place = (mpiss::shedule_place)i;
+						break;
+					}
+				}
+				if (first_not_empty_place == mpiss::shedule_place::null)
+					;//throw std::runtime_error("No cells!");
+				size_t size = t_ptr->town->places[first_not_empty_place].size();
+				for (size_t i = 0; i < initial_amount_of_hns; i++) {
+					//std::cout << "rndin\n";
+					size_t rounded_rnd;
+					do {
+						rounded_rnd = std::floor(size * mpiss::erand());
+					} while (t_ptr->town->places[first_not_empty_place][rounded_rnd].cells.empty());
+					auto& vec = t_ptr->town->places[first_not_empty_place][rounded_rnd].cells;
+					double fin_id = std::floor(vec.size() * mpiss::erand());
+					vec[size_t(fin_id)]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
+					//std::cout << "rndout\n";
+				}
+
+				//std::cout << "after\n";
+				for (size_t i = 0; i < iters; i++) {
+					//std::cout << "iter\n";
+					t_ptr->town->make_iteration();
+					//std::cout << "precnt\n";
+					t_ptr->town->update_counters();
+					//std::cout << "postcnt\n";
+					t_ptr->counters[rep][i] = t_ptr->town->counters;
+					//std::cout << i << std::endl;
+				}
+				//std::cout << "long after\n";
+				t_ptr->town->reset();
+				//std::cout << "reset\n";
+			}
+		};
+
+		for (auto& pthread : threads) {
+			auto ptr = ((thread_data**)pthread->__void_ptr_accsess());
+			if (!*ptr) {
+				*ptr = new thread_data;
+			}
+			(*ptr)->town = t_builder.create_town();
+			pthread->set_new_function(automation_func);
+			(*ptr)->counters.clear();
+			(*ptr)->counters.resize(repeats_per_thread_rounded_up, 
+				std::vector<point<mpiss::state_enum_size>>(iters, point<mpiss::state_enum_size>()));
+			pthread->sign_awaiting();
+		}
+		bool not_all_are_ready = true;
+		while (not_all_are_ready) {
+			not_all_are_ready = false;
+			for (auto& pthread : threads) {
+				if (pthread->get_state() != pooled_thread::state::idle)
+					not_all_are_ready = true;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(25));
+		}
+
+		point<mpiss::state_enum_size> mean, mean_sq, std_err, zero;
+		std::vector<std::pair<point<mpiss::state_enum_size>, point<mpiss::state_enum_size>>> result;
+
+		for (size_t i = 0; i < iters; i++) {
+			mean = zero;
+			mean_sq = zero;
+			std_err = zero;
+			size_t cnt = 0;
+			for (auto& th : threads) {
+				auto ptr = *((thread_data**)th->__void_ptr_accsess());
+				for (auto& cnt_vec : ptr->counters) {
+					cnt++;
+					auto cur_point = cnt_vec[i];
+					mean += cur_point;
+					mean_sq += (cur_point ^ 2);
+				}
+			}
+			mean /= fixed_repeats;
+			mean_sq /= fixed_repeats;
+			std_err = mean_sq - (mean ^ 2);
+
+			result.push_back({ mean, std_err });
+		}
+
+		return result;
+	}
+};
+
 int main() {
 	std::ios_base::sync_with_stdio(false); 
-	town_builder t_builder;
+	town_manipulator t_manip;
 	decltype(MOFD(L"", L"JSON Files(*.json)\0*.json\0")) files;
 	do {
 		files = MOFD(L"Get town info file\n", L"JSON Files(*.json)\0*.json\0");
 	} while (files.empty());
 
-	t_builder.info_filename = files[0];
+	t_manip.t_builder.info_filename = files[0];
 
-	if (!t_builder.load()) {
-		std::cout << t_builder.last_error << std::endl;
+	if (!t_manip.t_builder.load()) {
+		std::cout << t_manip.t_builder.last_error << std::endl;
 	}
-	std::cout << t_builder.warning_list << std::endl;
+	std::cout << t_manip.t_builder.warning_list << std::endl;
 
-	auto ptr = t_builder.create_town();
+	auto t_ptr = t_manip.t_builder.create_town();
 	
 	decltype(MOFD(L"", L"Text Files(*.txt)\0*.txt\0")) params;
 	do {
-		params = MOFD(L"Get disease parameters\n");
+		params = MOFD(L"Get disease parameters\n", L"Text Files(*.txt)\0*.txt\0");
 	} while (params.empty());
 
 	std::ifstream fin(params[0]);
+	
+	auto vals = get_all_parameters(*t_manip.t_builder.pdp, *t_manip.t_builder.state_spread_modifier, *(t_manip.t_builder.contact_probabilities));
 
-	auto vals = get_all_parameters(*t_builder.pdp, *t_builder.state_spread_modifier);
-
-	for (auto ptr : vals) {
+	for (auto& ptr : vals) {
 		fin >> *ptr;
 	}
+
+	size_t reps = 100, iters=1000, initials=1;
+	/*std::cout << "Approximate repeats count: ";
+	std::cin >> reps;
+	std::cout << "Amount of iterations: ";
+	std::cin >> iters;
+	std::cout << "Amount of initially ill: ";
+	std::cin >> initials;*/
+	std::vector<std::pair<point<mpiss::state_enum_size>, point<mpiss::state_enum_size>>> result;
+
+	result = t_manip.start_simulation_with_current_parameters(reps, iters, initials);
+
+	std::ofstream fout("output.csv");
+
+	for (auto& iter : result) {
+		for (size_t i = 0; i < mpiss::state_enum_size; i++) {
+			fout << iter.first[i] << ";" << iter.second[i] << ";";
+		}
+		fout << std::endl;
+	}
+
+	fout.close();
 
 	return 0;
 }

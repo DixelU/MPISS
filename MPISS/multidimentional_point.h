@@ -87,6 +87,12 @@ struct point {
 			N[i] = pt[i] * M;
 		return N;
 	}
+	inline point<dims> operator^(double M) const {
+		point<dims> N;
+		for (size_t i = 0; i < dims; i++)
+			N[i] = std::pow(pt[i], M);
+		return N;
+	}
 	inline point<dims> operator*=(double M) {
 		for (size_t i = 0; i < dims; i++)
 			pt[i] *= M;

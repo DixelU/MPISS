@@ -62,6 +62,7 @@ namespace mpiss {
 		}
 		inline void reset() override {
 			mpiss::cell::reset();
+			shedule.revert_all_overrides();
 			(*shedule)[cur_shedule].left = (*shedule)[cur_shedule].len;
 			cur_shedule = 0;
 		}
