@@ -45,12 +45,24 @@ public:
 
 	inline matrix& operator=(const matrix& rightMatrix);
 	inline matrix operator*(double a) const;
+	inline matrix operator*=(double a);
 	inline matrix operator+(const matrix& rightMatrix) const;
 	inline matrix operator-(const matrix& rightMatrix) const;
 	inline matrix operator/(double a) const;
+	inline matrix operator/=(double a);
 	inline matrix operator*(const matrix& rightMatrix) const;
 	inline matrix operator^(int64_t degree) const;
 	inline bool operator==(const matrix& rightMatrix) const;
+
+	inline matrix ppow(double p) const;
+	inline matrix sppow(double p);
+	inline matrix apply(std::function<void(double&)> func) const;
+	inline matrix sapply(std::function<void(double&)> func);
+	inline double psum() const;
+	inline matrix pabs() const;
+	inline matrix spabs();
+	inline void normalize(double p = 2);
+	inline double norma(double p = 2) const;
 
 	inline matrix transpose() const;
 	inline double trace() const;
@@ -170,6 +182,24 @@ inline matrix matrix::operator*(double Num) const {
 		}
 	}
 	return prodMatrix;
+}
+
+inline matrix matrix::operator*=(double Num) {
+	for (auto&& l : _matrix) {
+		for (auto&& d : l) {
+			d *= Num;
+		}
+	}
+	return *this;
+}
+
+inline matrix matrix::operator/=(double Num) {
+	for (auto&& l : _matrix) {
+		for (auto&& d : l) {
+			d /= Num;
+		}
+	}
+	return *this;
 }
 
 inline matrix matrix::operator+(const matrix& rightMatrix) const {
@@ -466,4 +496,60 @@ inline bool matrix::operator<=(const matrix& comparation_m) const {
 			if (at(x, y) > comparation_m.at(x, y))
 				return false;
 	return true;
+}
+
+inline matrix matrix::ppow(double p) const {
+	matrix mx(*this);
+	return mx.sppow(p);
+}
+
+inline matrix matrix::sppow(double p) {
+	for (auto& line : _matrix)
+		for (auto& val : line)
+			val = std::pow(val, p);
+	return *this;
+}
+
+inline matrix matrix::pabs() const {
+	matrix mx(*this);
+	return mx.spabs();
+}
+
+inline matrix matrix::spabs() {
+	for (auto& line : _matrix)
+		for (auto& val : line)
+			val = std::abs(val);
+	return *this;
+}
+
+inline double matrix::psum() const {
+	double s = 0;
+	for (auto& line : _matrix)
+		for (auto& val : line)
+			s += val;
+	return s;
+}
+
+inline matrix matrix::sapply(std::function<void(double&)> func) {
+	for (auto& line : _matrix)
+		for (auto& val : line)
+			func(val);
+	return *this;
+}
+
+inline matrix matrix::apply(std::function<void(double&)> func) const {
+	matrix mx(*this);
+	return mx.sapply(func);
+}
+
+inline void matrix::normalize(double p) {
+	*this /= std::pow(ppow(2).psum(), 1 / p);
+}
+
+inline double matrix::norma(double p) const {
+	double sum = 0;
+	for (auto& line : _matrix)
+		for (auto& val : line)
+			sum += std::pow(val,p);
+	return std::pow(sum, 1. / sum);
 }

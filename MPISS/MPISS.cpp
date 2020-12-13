@@ -10,8 +10,7 @@
 #include <chrono>
 
 #include <thread>
-
-#include <boost/stacktrace.hpp>
+#include <locale>
 
 #include "mpiss_town.h"
 #include "probabiliy_disease_progress.h"
@@ -22,36 +21,27 @@
 
 #include "exprtk_wrapper.h"
 
+#include "matrix.h"
+
 mpiss::probability_disease_progress regular_progress_builder(){
 	mpiss::single_prob_branch f_h({});
-	mpiss::single_prob_branch f_hns({
-		{mpiss::disease_state::hidden_spreading, mpiss::erand() * 0.1},
-		{mpiss::disease_state::spreading_immune,  mpiss::erand() * 0.1},
-		{mpiss::disease_state::immune,  mpiss::erand() * 0.1},
-		{mpiss::disease_state::healthy, mpiss::erand() * 0.1}
+	mpiss::single_prob_branch f_hns({ //hidden_nonspreading
+		{mpiss::disease_state::hidden_spreading, mpiss::erand() * 0.1}
 		});
-	mpiss::single_prob_branch f_hs({
+	mpiss::single_prob_branch f_hs({//hidden_spreading
 		{mpiss::disease_state::active_spread,  mpiss::erand() * 0.1},
+		});
+	mpiss::single_prob_branch f_as({//active_spread
 		{mpiss::disease_state::spreading_immune,  mpiss::erand() * 0.1},
+		});
+	mpiss::single_prob_branch f_si({//spreading_immune
 		{mpiss::disease_state::immune,  mpiss::erand() * 0.1},
-		{mpiss::disease_state::healthy,  mpiss::erand() * 0.1},
 		{mpiss::disease_state::dead,  mpiss::erand() * 0.1}
 		});
-	mpiss::single_prob_branch f_as({
-		{mpiss::disease_state::spreading_immune,  mpiss::erand() * 0.1},
-		{mpiss::disease_state::immune,  mpiss::erand() * 0.1},
-		{mpiss::disease_state::healthy,  mpiss::erand() * 0.1},
-		{mpiss::disease_state::dead,  mpiss::erand() * 0.1}
-		});
-	mpiss::single_prob_branch f_si({
-		{mpiss::disease_state::immune,  mpiss::erand() * 0.1},
-		{mpiss::disease_state::healthy,  mpiss::erand() * 0.1},
-		{mpiss::disease_state::dead,  mpiss::erand() * 0.1}
-		});
-	mpiss::single_prob_branch f_i({
+	mpiss::single_prob_branch f_i({//immune
 		{mpiss::disease_state::healthy,  mpiss::erand() * 0.1}
 		});
-	auto vec = std::vector<mpiss::single_prob_branch>{ f_h,f_hns,f_hs,f_as,f_si,f_i };
+	auto vec = std::vector<mpiss::single_prob_branch>{ f_h, f_hns, f_hs, f_as, f_si, f_i, f_h };
 	return mpiss::probability_disease_progress(
 		std::vector<decltype(vec)>(mpiss::age_enum_size, vec)
 	);
@@ -76,6 +66,71 @@ inline std::vector<double*> get_all_parameters(
 		vec.push_back(&prob);
 	return vec;
 }
+
+inline matrix load_params(const std::vector<double*>& params) {
+	matrix mx;
+	mx.resize(params.size(), 1);
+	for (int i = 0; i < params.size(); i++)
+		mx.at(0, i) = *params[i];
+	return mx;
+}
+
+inline void unload_params(std::vector<double*>& params, matrix& mx) {
+	for (int i = 0; i < params.size(); i++)
+		*params[i] = mx.at(0, i);
+}
+
+struct params_manipulator {
+	std::function<double(const matrix&)> f;
+	inline matrix gradient(const matrix& p) {
+		constexpr double step = 0.00001;
+		auto h = p * step;
+		matrix e(p.rows(), p.cols()), D(p.rows(), p.cols());
+		for (size_t i = 0; i < e.rows(); i++) {
+			e.at(0, i) = h.at(0, i);
+			auto pph = p + e, pmh = p - e;
+			pph.sapply([](double& v) { v = std::clamp(v, 0., 1.); });
+			pmh.sapply([](double& v) { v = std::clamp(v, 0., 1.); });
+			D.at(0, i) = (f(pph) - f(pmh)) / (2 * h.at(0, i));
+			e.at(0, i) = 0;
+		}
+		return D;
+	}
+	inline static std::pair<double, double> find_edge_multipliers(matrix D, const matrix& pt) {
+		double top = 1e12, bottom = 1e12;
+		for (int i = 0; i < D.rows(); i++) {
+			double curval = D.at(0, i) + pt.at(0, i);
+			if (top * curval > 1)
+				top = 1 / curval;
+			if (top * curval < 0)
+				top = 0;
+			if (bottom * curval > 1)
+				bottom = 1 / curval;
+			if (bottom * curval < 0)
+				bottom = 0;
+		}
+		return { top,bottom };
+	}
+	inline static std::tuple<bool,std::optional<matrix>, double, double> align_vector(const matrix& D, const matrix& pt) {
+		auto [top, bottom] = find_edge_multipliers(D, pt);
+		if (top != bottom)
+			return { true, {}, top, bottom };
+		matrix modifiedD(D.rows(), D.cols());
+		for (int i = 0; i < D.rows(); i++) {
+			modifiedD.at(0, i) = std::clamp(D.at(0, i) + pt.at(0, i), 0., 1.) - pt.at(0, i);
+		}
+		if (modifiedD.norma() < DBL_EPSILON)
+			return { false, {}, 0,0 };
+		auto [newtop, newbottom] = find_edge_multipliers(modifiedD, pt);
+		return { true, modifiedD, top, bottom };
+	}
+	inline static double onedim_minimistaion(std::function<double(double)> func, double param) {
+
+	}
+	inline matrix simple_gradient_meth(const matrix& p) {
+
+	}
+};
 
 inline std::vector<std::wstring> MOFD(const wchar_t* Title, const wchar_t* Filter) {
 	OPENFILENAME ofn;       // common dialog box structure
@@ -420,7 +475,6 @@ struct town_manipulator {
 		auto automation_func = [&](void** ptr) {
 			auto t_ptr = *(thread_data**)ptr;
 			for (size_t rep = 0; rep < repeats_per_thread_rounded_up; rep++) {
-				//std::cout << "before\n";
 				mpiss::shedule_place first_not_empty_place = mpiss::shedule_place::null;
 				for (size_t i = 0; i < mpiss::shedule_enum_size; i++) {
 					if (t_ptr->town->places[(mpiss::shedule_place)i].size()) {
@@ -432,7 +486,6 @@ struct town_manipulator {
 					;//throw std::runtime_error("No cells!");
 				size_t size = t_ptr->town->places[first_not_empty_place].size();
 				for (size_t i = 0; i < initial_amount_of_hns; i++) {
-					//std::cout << "rndin\n";
 					size_t rounded_rnd;
 					do {
 						rounded_rnd = std::floor(size * mpiss::erand());
@@ -440,22 +493,14 @@ struct town_manipulator {
 					auto& vec = t_ptr->town->places[first_not_empty_place][rounded_rnd].cells;
 					double fin_id = std::floor(vec.size() * mpiss::erand());
 					vec[size_t(fin_id)]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
-					//std::cout << "rndout\n";
 				}
 
-				//std::cout << "after\n";
 				for (size_t i = 0; i < iters; i++) {
-					//std::cout << "iter\n";
 					t_ptr->town->make_iteration();
-					//std::cout << "precnt\n";
 					t_ptr->town->update_counters();
-					//std::cout << "postcnt\n";
 					t_ptr->counters[rep][i] = t_ptr->town->counters;
-					//std::cout << i << std::endl;
 				}
-				//std::cout << "long after\n";
 				t_ptr->town->reset();
-				//std::cout << "reset\n";
 			}
 		};
 
@@ -509,6 +554,10 @@ struct town_manipulator {
 	}
 };
 
+struct comma final : std::numpunct<char> {
+	char do_decimal_point() const override { return ','; }
+};
+
 int main() {
 	std::ios_base::sync_with_stdio(false); 
 	town_manipulator t_manip;
@@ -550,7 +599,12 @@ int main() {
 
 	result = t_manip.start_simulation_with_current_parameters(reps, iters, initials);
 
+
+
 	std::ofstream fout("output.csv");
+
+	if (true)
+		fout.imbue(std::locale(std::locale::classic(), new comma));
 
 	for (auto& iter : result) {
 		for (size_t i = 0; i < mpiss::state_enum_size; i++) {

@@ -10,10 +10,13 @@ namespace mpiss {
 		single_prob_branch(const std::vector<std::pair<mpiss::disease_state, double>>& branches):
 			branches(branches){}
 		inline mpiss::disease_state evalute_prob(double rnd, mpiss::disease_state cur_state) const {
+			if (branches.empty())
+				return cur_state;
+			auto prob = 0.;
 			for (const auto& ds : branches) {
-				if (rnd < ds.second)
+				prob = (1. - prob) * ds.second;
+				if (rnd < prob)
 					return ds.first;
-				rnd -= ds.second;
 			}
 			return cur_state;
 		}
