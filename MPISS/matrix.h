@@ -48,6 +48,8 @@ public:
 	inline matrix operator*=(double a);
 	inline matrix operator+(const matrix& rightMatrix) const;
 	inline matrix operator-(const matrix& rightMatrix) const;
+	inline matrix operator+=(const matrix& rightMatrix);
+	inline matrix operator-=(const matrix& rightMatrix);
 	inline matrix operator/(double a) const;
 	inline matrix operator/=(double a);
 	inline matrix operator*(const matrix& rightMatrix) const;
@@ -56,8 +58,8 @@ public:
 
 	inline matrix ppow(double p) const;
 	inline matrix sppow(double p);
-	inline matrix apply(std::function<void(double&)> func) const;
-	inline matrix sapply(std::function<void(double&)> func);
+	inline matrix apply(const std::function<void(double&)>& func) const;
+	inline matrix sapply(const std::function<void(double&)>& func);
 	inline double psum() const;
 	inline matrix pabs() const;
 	inline matrix spabs();
@@ -210,6 +212,24 @@ inline matrix matrix::operator+(const matrix& rightMatrix) const {
 		}
 	}
 	return sumMatrix;
+}
+
+inline matrix matrix::operator+=(const matrix& rightMatrix) {
+	for (size_t y = 0; y < rows(); y++) {
+		for (size_t x = 0; x < cols(); x++) {
+			at(x, y) += rightMatrix.at(x, y);
+		}
+	}
+	return (*this);
+} 
+
+inline matrix matrix::operator-=(const matrix& rightMatrix) {
+	for (size_t y = 0; y < rows(); y++) {
+		for (size_t x = 0; x < cols(); x++) {
+			at(x, y) -= rightMatrix.at(x, y);
+		}
+	}
+	return (*this);
 }
 
 inline matrix matrix::operator-(const matrix& rightMatrix) const {
@@ -500,7 +520,8 @@ inline bool matrix::operator<=(const matrix& comparation_m) const {
 
 inline matrix matrix::ppow(double p) const {
 	matrix mx(*this);
-	return mx.sppow(p);
+	mx.sppow(p);
+	return mx;
 }
 
 inline matrix matrix::sppow(double p) {
@@ -512,7 +533,8 @@ inline matrix matrix::sppow(double p) {
 
 inline matrix matrix::pabs() const {
 	matrix mx(*this);
-	return mx.spabs();
+	mx.spabs();
+	return mx;
 }
 
 inline matrix matrix::spabs() {
@@ -530,16 +552,17 @@ inline double matrix::psum() const {
 	return s;
 }
 
-inline matrix matrix::sapply(std::function<void(double&)> func) {
+inline matrix matrix::sapply(const std::function<void(double&)>& func) {
 	for (auto& line : _matrix)
 		for (auto& val : line)
 			func(val);
 	return *this;
 }
 
-inline matrix matrix::apply(std::function<void(double&)> func) const {
+inline matrix matrix::apply(const std::function<void(double&)>& func) const {
 	matrix mx(*this);
-	return mx.sapply(func);
+	mx.sapply(func);
+	return mx;
 }
 
 inline void matrix::normalize(double p) {
@@ -550,6 +573,6 @@ inline double matrix::norma(double p) const {
 	double sum = 0;
 	for (auto& line : _matrix)
 		for (auto& val : line)
-			sum += std::pow(val,p);
+			sum += std::pow(std::abs(val),p);
 	return std::pow(sum, 1. / sum);
 }

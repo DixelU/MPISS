@@ -81,54 +81,124 @@ inline void unload_params(std::vector<double*>& params, matrix& mx) {
 }
 
 struct params_manipulator {
-	std::function<double(const matrix&)> f;
-	inline matrix gradient(const matrix& p) {
-		constexpr double step = 0.00001;
-		auto h = p * step;
+	inline static matrix gradient(std::function<double(const matrix&)> f, const matrix& p) {
+		constexpr double step = 0.000001;
 		matrix e(p.rows(), p.cols()), D(p.rows(), p.cols());
+		auto h = p * step;
+		h.sapply([step](double& v) {if (v < DBL_EPSILON) v = step; });
 		for (size_t i = 0; i < e.rows(); i++) {
 			e.at(0, i) = h.at(0, i);
 			auto pph = p + e, pmh = p - e;
 			pph.sapply([](double& v) { v = std::clamp(v, 0., 1.); });
 			pmh.sapply([](double& v) { v = std::clamp(v, 0., 1.); });
-			D.at(0, i) = (f(pph) - f(pmh)) / (2 * h.at(0, i));
+			D.at(0, i) = (f(pph) - f(pmh)) / (pph.at(0, i) - pmh.at(0, i));
 			e.at(0, i) = 0;
 		}
 		return D;
 	}
 	inline static std::pair<double, double> find_edge_multipliers(matrix D, const matrix& pt) {
-		double top = 1e12, bottom = 1e12;
+		double top = 1e12, bottom = -1e12;
 		for (int i = 0; i < D.rows(); i++) {
-			double curval = D.at(0, i) + pt.at(0, i);
-			if (top * curval > 1)
-				top = 1 / curval;
-			if (top * curval < 0)
-				top = 0;
-			if (bottom * curval > 1)
-				bottom = 1 / curval;
-			if (bottom * curval < 0)
-				bottom = 0;
+			double cur_d = D.at(0, i);
+			double cur_p = pt.at(0, i);
+			if (top * cur_d + cur_p > 1)
+				top = (1 - cur_p) / cur_d;
+			if (top * cur_d + cur_p < 0)
+				top = -cur_p / cur_d;
+			if (bottom * cur_d + cur_p > 1)
+				bottom = (1 - cur_p) / cur_d;
+			if (bottom * cur_d + cur_p < 0)
+				bottom = -cur_p / cur_d;
 		}
 		return { top,bottom };
 	}
-	inline static std::tuple<bool,std::optional<matrix>, double, double> align_vector(const matrix& D, const matrix& pt) {
+	inline static std::tuple<bool, std::optional<matrix>, double, double> align_gradient(const matrix& D, const matrix& pt, double epsilon) {
 		auto [top, bottom] = find_edge_multipliers(D, pt);
-		if (top != bottom)
-			return { true, {}, top, bottom };
+		if (std::abs(top)+std::abs(bottom) > epsilon)
+			return { true, D, top, bottom };
 		matrix modifiedD(D.rows(), D.cols());
 		for (int i = 0; i < D.rows(); i++) {
 			modifiedD.at(0, i) = std::clamp(D.at(0, i) + pt.at(0, i), 0., 1.) - pt.at(0, i);
 		}
-		if (modifiedD.norma() < DBL_EPSILON)
+		if (modifiedD.norma(1.) < epsilon)
 			return { false, {}, 0,0 };
 		auto [newtop, newbottom] = find_edge_multipliers(modifiedD, pt);
-		return { true, modifiedD, top, bottom };
+		if (std::abs(newtop) + std::abs(newbottom) < epsilon)
+			return { false, {}, 0, 0 };
+		return { true, modifiedD, newtop, newbottom };
 	}
-	inline static double onedim_minimistaion(std::function<double(double)> func, double param) {
-
+	inline static double onedim_minimistaion(std::function<double(double)> func, double a, double b, double Eps = 0.001) {
+		constexpr double tau = 0.61803398874989484820458683436564;
+		double x, y, fx, fy;
+		x = a + (1 - tau) * (b - a);
+		y = a + tau * (b - a);
+		fx = func(x); fy = func(y);
+		while (std::abs(b - a) >= Eps) {
+			if (fx > fy) {
+				a = x;
+				x = y;
+				fx = fy;
+				y = a + tau * (b - a);
+				fy = func(y);
+			}
+			else {
+				b = y;
+				y = x;
+				fy = fx;
+				x = a + (1 - tau) * (b - a);
+				fx = func(x);
+			}
+		}
+		return 0.5 * (a + b);
 	}
-	inline matrix simple_gradient_meth(const matrix& p) {
+	//**  minima and h  **//
+	inline static std::pair<double,double> onedim_grid_minima(std::function<double(double)> func, double a, double b, int n = 6, double Eps = 0.001) {
+		double minima = a, minfunc = INFINITY;
+		double cur, h = (b - a)/n;
+		cur = a + h;
+		n -= 2;
+		while (n-->0) {
+			double newfuncvalue = func(cur);
+			if (minfunc > newfuncvalue) {
+				minfunc = newfuncvalue;
+				minima = cur;
+			}
+			cur += h;
+		}
+		return { minima , h };
+	}
+	inline static matrix simple_gradient_meth(std::function<double(const matrix&)> func, matrix begin) {
+		constexpr double epsilon = 0.000001;
+		matrix prev;
+		do {
+			auto grad = (gradient(func, begin))*(-1);
+			std::cout << "Orig step: " << grad.transpose() << std::endl;
+			auto [is_not_degenerated, optD, top, bottom] = align_gradient(grad, begin, epsilon);
+			if (!is_not_degenerated)
+				return begin;
+			auto D = optD.value();
 
+			std::cout << "Final step: " << D.transpose() << std::endl;
+
+			auto odfunc = [&](double p) -> double {
+				return func(begin + p * D);
+			};
+
+			auto [minima, h] = onedim_grid_minima(odfunc, bottom, top, 20, epsilon);
+			auto local_minima = onedim_minimistaion(odfunc, minima - h, minima + h, epsilon);
+			prev = (begin);
+			auto next_step = D * local_minima;
+			begin += next_step;
+
+			if (next_step.norma(1) < epsilon)
+				break;
+
+			std::cout << "Step norma: " << D.norma(1) << std::endl;
+			//if ((prev - begin).norma(1) < epsilon)
+				//break;
+			std::cout << "Next approx: " << begin.transpose();
+		} while (true);
+		return begin;
 	}
 };
 
@@ -516,6 +586,7 @@ struct town_manipulator {
 				std::vector<point<mpiss::state_enum_size>>(iters, point<mpiss::state_enum_size>()));
 			pthread->sign_awaiting();
 		}
+
 		bool not_all_are_ready = true;
 		while (not_all_are_ready) {
 			not_all_are_ready = false;
@@ -559,6 +630,19 @@ struct comma final : std::numpunct<char> {
 };
 
 int main() {
+	auto func = [](const matrix& v)->double {
+		auto innerfunc = [](double& v)->void {v = (v - 0.9) * (v - 0.5) * (v - 0.6) * (v - 0.1)*20; };
+		auto mat = v.apply(innerfunc);
+		auto val = v.psum();
+		std::cout << "Func at " << v.transpose() << val << std::endl;
+		return val;
+	};
+	matrix begin = { {.5,.5,.5,0.1,.1,.4,0.3} };
+	auto end = params_manipulator::simple_gradient_meth(func, begin.transpose());
+	std::cout << func(end) << std::endl;
+}
+
+int __main() {
 	std::ios_base::sync_with_stdio(false); 
 	town_manipulator t_manip;
 	decltype(MOFD(L"", L"JSON Files(*.json)\0*.json\0")) files;
