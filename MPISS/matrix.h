@@ -574,5 +574,5 @@ inline double matrix::norma(double p) const {
 	for (auto& line : _matrix)
 		for (auto& val : line)
 			sum += std::pow(std::abs(val),p);
-	return std::pow(sum, 1. / sum);
+	return std::pow(sum, 1. / p);
 }

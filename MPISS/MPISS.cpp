@@ -172,13 +172,13 @@ struct params_manipulator {
 		matrix prev;
 		do {
 			auto grad = (gradient(func, begin))*(-1);
-			std::cout << "Orig step: " << grad.transpose() << std::endl;
+			//std::cout << "Orig step: " << grad.transpose() << std::endl;
 			auto [is_not_degenerated, optD, top, bottom] = align_gradient(grad, begin, epsilon);
 			if (!is_not_degenerated)
 				return begin;
 			auto D = optD.value();
 
-			std::cout << "Final step: " << D.transpose() << std::endl;
+			//std::cout << "Final step: " << D.transpose() << std::endl;
 
 			auto odfunc = [&](double p) -> double {
 				return func(begin + p * D);
@@ -190,13 +190,13 @@ struct params_manipulator {
 			auto next_step = D * local_minima;
 			begin += next_step;
 
-			if (next_step.norma(1) < epsilon)
+			if (next_step.norma(2) < epsilon)
 				break;
 
-			std::cout << "Step norma: " << D.norma(1) << std::endl;
+			//std::cout << "Step norma: " << next_step.norma(1) << std::endl;
 			//if ((prev - begin).norma(1) < epsilon)
 				//break;
-			std::cout << "Next approx: " << begin.transpose();
+			//std::cout << "Next approx: " << begin.transpose();
 		} while (true);
 		return begin;
 	}
@@ -629,20 +629,24 @@ struct comma final : std::numpunct<char> {
 	char do_decimal_point() const override { return ','; }
 };
 
-int main() {
-	auto func = [](const matrix& v)->double {
-		auto innerfunc = [](double& v)->void {v = (v - 0.9) * (v - 0.5) * (v - 0.6) * (v - 0.1)*20; };
+int __main() {
+	int counter = 0;
+	auto func = [&](const matrix& v)->double {
+		auto innerfunc = [](double& v)->void {v = (v - 0.789865468); };
 		auto mat = v.apply(innerfunc);
-		auto val = v.psum();
-		std::cout << "Func at " << v.transpose() << val << std::endl;
+		mat.at(0, 0) *= 4;
+		auto val = mat.norma();
+		//std::cout << "Func at " << v.transpose() << val << std::endl;
+		counter++;
 		return val;
 	};
-	matrix begin = { {.5,.5,.5,0.1,.1,.4,0.3} };
+	matrix begin = { {0.1,0.23,0.17,0.24,0.51} };
 	auto end = params_manipulator::simple_gradient_meth(func, begin.transpose());
 	std::cout << func(end) << std::endl;
+	std::cout << "Function call count: " << counter << std::endl;
 }
 
-int __main() {
+int main() {
 	std::ios_base::sync_with_stdio(false); 
 	town_manipulator t_manip;
 	decltype(MOFD(L"", L"JSON Files(*.json)\0*.json\0")) files;
