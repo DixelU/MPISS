@@ -528,7 +528,8 @@ struct town_manipulator {
 
 	struct thread_data {
 		mpiss::town* town;
-		std::vector<std::vector<point<mpiss::state_enum_size>>> counters;
+		std::vector<std::vector<point<mpiss::state_enum_size>>> counters; 
+		size_t initial_amount_of_hns;
 	};
 
 	std::vector<std::pair<point<mpiss::state_enum_size>, point<mpiss::state_enum_size>>>
@@ -553,15 +554,19 @@ struct town_manipulator {
 					}
 				}
 				if (first_not_empty_place == mpiss::shedule_place::null)
-					;//throw std::runtime_error("No cells!");
+					throw std::runtime_error("No cells!");
 				size_t size = t_ptr->town->places[first_not_empty_place].size();
-				for (size_t i = 0; i < initial_amount_of_hns; i++) {
+				for (size_t i = 0; i < t_ptr->initial_amount_of_hns; i++) {
 					size_t rounded_rnd;
 					do {
 						rounded_rnd = std::floor(size * mpiss::erand());
 					} while (t_ptr->town->places[first_not_empty_place][rounded_rnd].cells.empty());
 					auto& vec = t_ptr->town->places[first_not_empty_place][rounded_rnd].cells;
 					double fin_id = std::floor(vec.size() * mpiss::erand());
+					if (vec[size_t(fin_id)]->next_disease_state == mpiss::disease_state::hidden_nonspreading) {
+						i--;
+						continue;
+					}
 					vec[size_t(fin_id)]->next_disease_state = mpiss::disease_state::hidden_nonspreading;
 				}
 
@@ -579,6 +584,7 @@ struct town_manipulator {
 			if (!*ptr) {
 				*ptr = new thread_data;
 			}
+			(*ptr)->initial_amount_of_hns = initial_amount_of_hns;
 			(*ptr)->town = t_builder.create_town();
 			pthread->set_new_function(automation_func);
 			(*ptr)->counters.clear();
@@ -617,6 +623,7 @@ struct town_manipulator {
 			mean /= fixed_repeats;
 			mean_sq /= fixed_repeats;
 			std_err = mean_sq - (mean ^ 2);
+			std_err = std_err ^ 0.5;
 
 			result.push_back({ mean, std_err });
 		}
@@ -644,6 +651,7 @@ int __main() {
 	auto end = params_manipulator::simple_gradient_meth(func, begin.transpose());
 	std::cout << func(end) << std::endl;
 	std::cout << "Function call count: " << counter << std::endl;
+	return 0;
 }
 
 int main() {
@@ -686,8 +694,6 @@ int main() {
 	std::vector<std::pair<point<mpiss::state_enum_size>, point<mpiss::state_enum_size>>> result;
 
 	result = t_manip.start_simulation_with_current_parameters(reps, iters, initials);
-
-
 
 	std::ofstream fout("output.csv");
 
