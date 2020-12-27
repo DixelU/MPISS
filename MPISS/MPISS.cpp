@@ -47,6 +47,18 @@ mpiss::probability_disease_progress regular_progress_builder(){
 	);
 }
 
+inline std::vector<double*> get_some_parameters(mpiss::probability_disease_progress& pdp) {
+	std::vector<double*> vec;
+	for (auto& aged_pdp : pdp.data) {
+		for (auto& stated_pdp : aged_pdp) {
+			for (auto& branch : stated_pdp.branches) {
+				vec.push_back(&branch.second);
+			}
+		}
+	}
+	return vec;
+}
+
 inline std::vector<double*> get_all_parameters(
 	mpiss::probability_disease_progress& pdp,
 	point<mpiss::state_enum_size>& state_spread_modifier,
@@ -167,7 +179,7 @@ struct params_manipulator {
 		}
 		return { minima , h };
 	}
-	inline static matrix simple_gradient_meth(std::function<double(const matrix&)> func, matrix begin) {
+	inline static matrix simple_gradient_meth(std::function<double(const matrix&)> func, matrix begin, bool attempt_global_minimization) {
 		constexpr double epsilon = 0.000001;
 		matrix prev;
 		do {
@@ -183,9 +195,18 @@ struct params_manipulator {
 			auto odfunc = [&](double p) -> double {
 				return func(begin + p * D);
 			};
-
-			auto [minima, h] = onedim_grid_minima(odfunc, bottom, top, 20, epsilon);
-			auto local_minima = onedim_minimistaion(odfunc, minima - h, minima + h, epsilon);
+			
+			double a, b;
+			if (attempt_global_minimization) {
+				auto [minima, h] = onedim_grid_minima(odfunc, bottom, top, 20, epsilon);
+				a = minima - h;
+				b = minima + h;
+			}
+			else {
+				a = bottom;
+				b = top;
+			}
+			auto local_minima = onedim_minimistaion(odfunc, a, b, epsilon);
 			prev = (begin);
 			auto next_step = D * local_minima;
 			begin += next_step;
@@ -426,14 +447,16 @@ struct town_builder {
 
 			if(lockdown_functions_cit != main_obj.end() && lockdown_functions_cit->second->IsObject()){
 				auto lockdown_functions = lockdown_functions_cit->second->AsObject();
-				for(int i=0;i<=mpiss::age_enum_size;i++){
+				auto null_it = lockdown_functions.find(L"null");
+				bool there_is_null_function = (null_it != lockdown_functions.end());
+				for(int i=0;i<mpiss::age_enum_size;i++){
 					auto name = magic_enum::enum_name<mpiss::age_type>((mpiss::age_type)i);
 					auto value_cit = lockdown_functions.find(std::wstring(name.begin(),name.end()));
 					if (i != mpiss::age_enum_size) {
 						lockdown_func.push_back(new exprtk_wrapper({ { "t",*time } }));
 					}
-					if (value_cit == lockdown_functions.end() || value_cit->second->IsString()) {
-						if (i != mpiss::age_enum_size) {
+					if (value_cit == lockdown_functions.end() || !value_cit->second->IsString()) {
+						if (i != mpiss::age_enum_size && !there_is_null_function) {
 							if (lockdown_func[i])
 								delete lockdown_func[i];
 							lockdown_func[i] = nullptr;
@@ -441,10 +464,30 @@ struct town_builder {
 						continue;
 					}
 					auto str = value_cit->second->AsString();
-					if(i!=mpiss::age_enum_size){
-						auto ans = lockdown_func[i]->compile(std::string(str.begin(),str.end()));
+					auto ans = lockdown_func[i]->compile(std::string(str.begin(),str.end()));
+					if (!ans) {
+						auto vec_of_errors = lockdown_func[i]->get_errors();
+						for (auto& [err_line, err_col, err_name, err_desc] : vec_of_errors) {
+							warning_list += "Error while compilation of " +
+								std::string(str.begin(), str.end()) +
+								" lockdown functions at " +
+								std::to_string(err_line) + ":" +
+								std::to_string(err_col) + " " +
+								err_name + ": " + err_desc + "\n";
+						}
+						if (i != mpiss::age_enum_size) {
+							if (lockdown_func[i])
+								delete lockdown_func[i];
+							lockdown_func[i] = nullptr;
+						}
+					}
+				}	
+				if (there_is_null_function) {
+					auto str = null_it->second->AsString();
+					for (int j = 0; j < mpiss::age_enum_size; j++) {
+						auto ans = lockdown_func[j]->compile(std::string(str.begin(), str.end()));
 						if (!ans) {
-							auto vec_of_errors = lockdown_func[i]->get_errors();
+							auto vec_of_errors = lockdown_func[j]->get_errors();
 							for (auto& [err_line, err_col, err_name, err_desc] : vec_of_errors) {
 								warning_list += "Error while compilation of " +
 									std::string(str.begin(), str.end()) +
@@ -452,32 +495,6 @@ struct town_builder {
 									std::to_string(err_line) + ":" +
 									std::to_string(err_col) + " " +
 									err_name + ": " + err_desc + "\n";
-							}
-							if (i != mpiss::age_enum_size) {
-								if (lockdown_func[i])
-									delete lockdown_func[i];
-								lockdown_func[i] = nullptr;
-							}
-						}
-					}
-					else {
-						for (int j = 0; j < mpiss::age_enum_size; j++) {
-							auto ans = lockdown_func[i]->compile(std::string(str.begin(), str.end()));
-							if (!ans) {
-								auto vec_of_errors = lockdown_func[i]->get_errors();
-								for (auto& [err_line, err_col, err_name, err_desc] : vec_of_errors) {
-									warning_list += "Error while compilation of " +
-										std::string(str.begin(), str.end()) +
-										" lockdown functions at " +
-										std::to_string(err_line) + ":" +
-										std::to_string(err_col) + " " +
-										err_name + ": " + err_desc + "\n";
-								}
-								if (i != mpiss::age_enum_size) {
-									if (lockdown_func[i])
-										delete lockdown_func[i];
-									lockdown_func[i] = nullptr;
-								}
 							}
 						}
 					}
@@ -632,6 +649,62 @@ struct town_manipulator {
 	}
 };
 
+namespace mpiss {
+
+	enum class least_squares_use_source_sample_type {
+		healthy ,considered_healthy, dead, ill, all_ill
+	};
+	std::map<least_squares_use_source_sample_type, std::function<double(point<mpiss::state_enum_size>&)>> lsusst = {
+		{least_squares_use_source_sample_type::healthy, [](const point<mpiss::state_enum_size>& p)->double {
+			return p[size_t(disease_state::healthy)];
+		}},{least_squares_use_source_sample_type::considered_healthy, [](const point<mpiss::state_enum_size>& p)->double {
+			return p[size_t(disease_state::healthy)] + p[size_t(disease_state::hidden_nonspreading)] + p[size_t(disease_state::hidden_spreading)];
+		}},{least_squares_use_source_sample_type::dead, [](const point<mpiss::state_enum_size>& p)->double {
+			return p[size_t(disease_state::dead)];
+		}},{least_squares_use_source_sample_type::ill, [](const point<mpiss::state_enum_size>& p)->double {
+			return p[size_t(disease_state::active_spread)];
+		}},{least_squares_use_source_sample_type::all_ill, [](const point<mpiss::state_enum_size>& p)->double {
+			return p[size_t(disease_state::active_spread)] + p[size_t(disease_state::hidden_nonspreading)] + p[size_t(disease_state::hidden_spreading)];
+		}}
+	};
+}
+
+matrix find_closest_sample(
+	const std::vector<double>& source_sample,
+	matrix first_approx,
+	town_manipulator& t_manip,
+	size_t initials,
+	size_t repeats,
+	mpiss::least_squares_use_source_sample_type sample_type
+) {
+	size_t sample_size = source_sample.size();
+	auto params = get_all_parameters(*t_manip.t_builder.pdp, *t_manip.t_builder.state_spread_modifier, *(t_manip.t_builder.contact_probabilities));
+	struct matrix_less {
+		inline bool operator()(const matrix& mx1, const matrix& mx2) const {
+			return mx1.norma() < mx2.norma();
+		}
+	};
+	std::multimap<matrix, double, matrix_less> mset;
+	auto getter_function = mpiss::lsusst[sample_type];
+	auto func = [&](matrix mx) -> double {
+		auto [begin, end] = mset.equal_range(mx);
+		while (begin != end) {
+			if (begin->first == mx)
+				return begin->second;
+			begin++;
+		}
+		unload_params(params, mx);
+		auto ans = t_manip.start_simulation_with_current_parameters(repeats, sample_size, initials);
+		double sum = 0;
+		for (size_t i = 0; i < sample_size; i++) {
+			sum += std::pow(getter_function(ans[i].first) - source_sample[i], 2);
+		}
+		mset.insert({ mx, sum });
+		return sum;
+	};
+	return params_manipulator::simple_gradient_meth(func, first_approx, false);
+}
+
 struct comma final : std::numpunct<char> {
 	char do_decimal_point() const override { return ','; }
 };
@@ -648,7 +721,7 @@ int __main() {
 		return val;
 	};
 	matrix begin = { {0.1,0.23,0.17,0.24,0.51} };
-	auto end = params_manipulator::simple_gradient_meth(func, begin.transpose());
+	auto end = params_manipulator::simple_gradient_meth(func, begin.transpose(), false);
 	std::cout << func(end) << std::endl;
 	std::cout << "Function call count: " << counter << std::endl;
 	return 0;

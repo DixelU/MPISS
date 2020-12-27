@@ -18,7 +18,7 @@
         { "age": "mature", "track" : "H:4:7; T:2:1; W:1:8; T:2:1; M:1:1; H:4:6;", "special_track" : "H:4:108; M:1:1; H:4:11" }
     ],
     "lockdown_functions":{
-        "null":"(t>=1000)*e^((t-1000)/1000)*0.85"
+        "null":"(t>=1000)*2^((t-1000)/1000)*0.85"
     },
     "ticks_in_day": 24
 }

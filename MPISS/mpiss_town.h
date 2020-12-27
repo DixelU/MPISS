@@ -3,6 +3,7 @@
 #define MPISS_TOWN_NDEF
 
 #include <unordered_map>
+#include <functional>
 
 #include "mpiss_room.h"
 #include "mpiss_sheduled_cell.h"
@@ -16,6 +17,19 @@ namespace mpiss {
 		std::unordered_map<shedule_place, std::vector<room>> places;
 		point<state_enum_size> counters;
 
+		std::vector<sheduled_cell*> lockdown_cells_colist;
+		std::array<std::function<double(double)>, state_enum_size> dis_spread_modifiers;
+		std::array<std::function<double(double)>, shedule_enum_size> place_spread_modifiers;
+		std::array<std::function<double(double)>, state_enum_size> lockdown_drivers;
+		void assign_default_functions() {
+			for (auto& f : dis_spread_modifiers)
+				f = [](double x) -> double { return 1; };
+			for (auto& f : place_spread_modifiers)
+				f = [](double x) -> double { return 1; };
+			for (auto& f : lockdown_drivers)
+				f = [](double x) -> double { return 0; };
+			/// TODO: implement lockdown/params shift logic
+		}
 		town(cemetery *cem, const std::unordered_map<shedule_place, std::vector<room>>& places): places(places), cem(cem) {
 			update_counters();
 		}
