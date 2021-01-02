@@ -62,9 +62,11 @@ namespace mpiss {
 			for (int dis_st = 0; dis_st < state_enum_size; dis_st++) 
 				counters[dis_st] = 0;
 			for (auto& place_type : places) 
-				for (auto& single_place : place_type.second) 
-					for (int dis_st = 0; dis_st < state_enum_size; dis_st++) 
+				for (auto& single_place : place_type.second) {
+					single_place.update_counters();
+					for (int dis_st = 0; dis_st < state_enum_size; dis_st++)
 						counters[dis_st] += single_place.counters[dis_st];
+				}
 			counters[(size_t)mpiss::disease_state::dead] = cem->deads.size();
 		}
 		void move_cells() {

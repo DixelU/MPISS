@@ -25,9 +25,7 @@ namespace mpiss {
 			clear_counters();
 		}
 		void make_iteration() {
-			clear_counters();
-			for (auto cell : cells) 
-				counters[(size_t)cell->cur_disease_state]++;
+			update_counters();
 
 			for (auto cell : cells)
 				cell->make_iteration();
@@ -57,6 +55,11 @@ namespace mpiss {
 		void clear_counters() {
 			for (int i = 0; i < state_enum_size; i++) 
 				counters[i] = 0;
+		}
+		void update_counters() {
+			clear_counters();
+			for (auto cell : cells)
+				counters[(size_t)cell->cur_disease_state]++;
 		}
 		void print_counters(std::ostream& out) const {
 			for (int i = 0; i < state_enum_size; i++)

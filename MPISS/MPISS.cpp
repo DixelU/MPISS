@@ -23,6 +23,9 @@
 
 #include "matrix.h"
 
+//#define IS_SAMPLE_CONSTRUCTION_BUILD
+#define NO_MULTISET
+
 mpiss::probability_disease_progress regular_progress_builder(){
 	mpiss::single_prob_branch f_h({});
 	mpiss::single_prob_branch f_hns({ //hidden_nonspreading
@@ -42,9 +45,11 @@ mpiss::probability_disease_progress regular_progress_builder(){
 		{mpiss::disease_state::healthy,  mpiss::erand() * 0.1}
 		});
 	auto vec = std::vector<mpiss::single_prob_branch>{ f_h, f_hns, f_hs, f_as, f_si, f_i, f_h };
-	return mpiss::probability_disease_progress(
-		std::vector<decltype(vec)>(mpiss::age_enum_size, vec)
+	auto prog = mpiss::probability_disease_progress(
+		std::vector<decltype(vec)>(mpiss::age_enum_size)
 	);
+	prog.data[(int)mpiss::age_type::mature] = vec;
+	return prog;
 }
 
 inline std::vector<double*> get_some_parameters(mpiss::probability_disease_progress& pdp) {
@@ -97,12 +102,12 @@ struct params_manipulator {
 		constexpr double step = 0.000001;
 		matrix e(p.rows(), p.cols()), D(p.rows(), p.cols());
 		auto h = p * step;
-		h.sapply([step](double& v) {if (v < DBL_EPSILON) v = step; });
+		h.selfapply([step](double& v) {if (v < DBL_EPSILON) v = step; });
 		for (size_t i = 0; i < e.rows(); i++) {
 			e.at(0, i) = h.at(0, i);
 			auto pph = p + e, pmh = p - e;
-			pph.sapply([](double& v) { v = std::clamp(v, 0., 1.); });
-			pmh.sapply([](double& v) { v = std::clamp(v, 0., 1.); });
+			pph.selfapply([](double& v) { v = std::clamp(v, 0., 1.); });
+			pmh.selfapply([](double& v) { v = std::clamp(v, 0., 1.); });
 			D.at(0, i) = (f(pph) - f(pmh)) / (pph.at(0, i) - pmh.at(0, i));
 			e.at(0, i) = 0;
 		}
@@ -179,8 +184,13 @@ struct params_manipulator {
 		}
 		return { minima , h };
 	}
-	inline static matrix simple_gradient_meth(std::function<double(const matrix&)> func, matrix begin, bool attempt_global_minimization) {
-		constexpr double epsilon = 0.000001;
+	inline static matrix simple_gradient_meth(
+		std::function<double(const matrix&)> func,
+		matrix begin, 
+		bool attempt_global_minimization, 
+		std::function<bool(double, double)> norma_comparator = [](double eps, double norma)->bool {return norma < eps; },
+		double epsilon = 1e-10
+	) {
 		matrix prev;
 		do {
 			auto grad = (gradient(func, begin))*(-1);
@@ -211,15 +221,144 @@ struct params_manipulator {
 			auto next_step = D * local_minima;
 			begin += next_step;
 
-			if (next_step.norma(2) < epsilon)
+			if (norma_comparator(epsilon, next_step.norma(2)))
 				break;
 
-			//std::cout << "Step norma: " << next_step.norma(1) << std::endl;
+			std::cout << "Step norma: " << next_step.norma(1) << std::endl;
 			//if ((prev - begin).norma(1) < epsilon)
 				//break;
 			//std::cout << "Next approx: " << begin.transpose();
 		} while (true);
 		return begin;
+	}
+	inline static matrix differential_evolution(
+		std::function<double(const matrix&)> func, 
+		matrix sample,
+		double initial_wiggle_coef,
+		double replace_index_probability, 
+		size_t entries_amount,
+		double epsilon = 1e-10
+	) {
+		std::vector<matrix> entries;
+		std::vector<double> func_values;
+		entries.resize(entries_amount, sample);
+		func_values.resize(entries_amount, 1e127);
+
+		auto mutate = [&](size_t mx_id) -> matrix {
+			double coef = mpiss::erand() * 2;
+			size_t a_id, b_id, c_id;
+			do {
+				a_id = mpiss::erand() * entries_amount;
+			} while (mx_id == a_id);
+			do {
+				b_id = mpiss::erand() * entries_amount;
+			} while (mx_id == b_id || a_id == b_id);
+			do {
+				c_id = mpiss::erand() * entries_amount;
+			} while (mx_id == c_id || a_id == c_id || c_id == b_id);
+
+			matrix crossovered = entries[mx_id];
+			crossovered.selfapply_indexed([&](double& val, size_t row, size_t col) {
+				if (mpiss::erand() > replace_index_probability)
+					return;
+				val = std::clamp(entries[a_id].at(col, row) + coef * (entries[b_id].at(col, row) - entries[c_id].at(col, row)),0.,1.);
+			});
+			return crossovered;
+		};
+
+		for (auto& mx : entries) {
+			mx.selfapply([&](double& v) {v = std::clamp(mpiss::nrand() * initial_wiggle_coef, 0., 1.); });
+		}
+
+		double min, max;
+		size_t min_id, max_id;
+		do {
+			min = 1e127, max = -1e127;
+			min_id = 0, max_id = 0;
+			for (size_t i = 0; i < entries_amount; i++) {
+				auto new_approx = mutate(i);
+				auto new_value = func(new_approx);
+				if (new_value < func_values[i]) {
+					entries[i] = new_approx;
+					func_values[i] = new_value;
+				}
+				else
+					new_value = func_values[i];
+				if (new_value < min) {
+					min_id = i;
+					min = new_value;
+				}
+				else if (new_value > max) {
+					max_id = i;
+					max = new_value;
+				}
+			}
+			printf("Range: %lf\n", max - min);
+			printf("New minima: %lf\n", min);
+			std::cout << std::endl << entries[min_id] << std::endl;
+		} while (max - min > epsilon);
+		return entries[min_id];
+	}
+	inline static matrix extended_annealing(
+		std::function<double(const matrix&)> func,
+		matrix sample,
+		double initial_sample_siggling,
+		double wiggle_decay_coef,
+		double wiggle_probability,
+		double portion_of_nonwiggleable_matixes,
+		size_t entries_amount, 
+		double epsilon = 1e-10
+	) {
+		double cur_wiggle_coef = initial_sample_siggling;
+		std::vector<matrix> entries;
+		std::vector<matrix> buffer_entries;
+		std::vector<std::pair<double, int>> rate_vec;
+		entries.resize(entries_amount, sample);
+		rate_vec.resize(entries_amount, { 0.,0 });
+		size_t wiggleable_matixes = entries_amount * portion_of_nonwiggleable_matixes;
+
+		auto mx_wiggle_sapply_func = [&](double& val) {
+			if (mpiss::erand() > wiggle_probability)
+				return;
+			val = std::clamp(val + mpiss::nrand() * cur_wiggle_coef, 0., 1.);
+		};
+
+		for (auto& mx : entries) {
+			mx.selfapply([&](double& v) {
+				if (mpiss::erand() > wiggle_probability)
+					return;
+				v = std::clamp(mpiss::nrand() * initial_sample_siggling, 0., 1.); }
+			);
+		}
+
+		while (cur_wiggle_coef > epsilon) {
+			for (size_t i = 0; i < entries_amount; i++) {
+				double val = func(entries[i]);
+				rate_vec[i] = { val, i };
+			}
+			cur_wiggle_coef *= wiggle_decay_coef;
+
+			std::sort(rate_vec.begin(), rate_vec.end());
+
+			printf("Current minima: %lf\n", rate_vec.front().first);
+			printf("Current wiggle coef: %lf\n", cur_wiggle_coef);
+			std::cout << std::endl << entries[rate_vec.front().second] << std::endl;
+
+			for (size_t i = wiggleable_matixes; i < entries_amount; i++) {
+				auto& [value, id] = rate_vec[i];
+				size_t source_id = mpiss::erand() * wiggleable_matixes;
+				entries[id] = entries[source_id].apply(mx_wiggle_sapply_func);
+			}
+		}
+
+		for (size_t i = 0; i < entries_amount; i++) {
+			double val = func(entries[i]);
+			rate_vec[i] = { val, i };
+		}
+
+		std::sort(rate_vec.begin(), rate_vec.end());
+
+		return entries[rate_vec.front().second];
 	}
 };
 
@@ -600,9 +739,9 @@ struct town_manipulator {
 			auto ptr = ((thread_data**)pthread->__void_ptr_accsess());
 			if (!*ptr) {
 				*ptr = new thread_data;
+				(*ptr)->town = t_builder.create_town();
 			}
 			(*ptr)->initial_amount_of_hns = initial_amount_of_hns;
-			(*ptr)->town = t_builder.create_town();
 			pthread->set_new_function(automation_func);
 			(*ptr)->counters.clear();
 			(*ptr)->counters.resize(repeats_per_thread_rounded_up, 
@@ -670,58 +809,100 @@ namespace mpiss {
 }
 
 matrix find_closest_sample(
-	const std::vector<double>& source_sample,
+	const std::map<mpiss::disease_state, std::vector<double>>& source_sample,
 	matrix first_approx,
 	town_manipulator& t_manip,
 	size_t initials,
-	size_t repeats,
-	mpiss::least_squares_use_source_sample_type sample_type
+	size_t repeats
 ) {
-	size_t sample_size = source_sample.size();
+	const size_t sample_size = source_sample.begin()->second.size();
+	t_manip.t_builder.built_town->update_counters();
+	const size_t town_size = t_manip.t_builder.built_town->counters[(size_t)mpiss::disease_state::healthy];
+	const double conversion_coeficient = 1. / town_size;
 	auto params = get_all_parameters(*t_manip.t_builder.pdp, *t_manip.t_builder.state_spread_modifier, *(t_manip.t_builder.contact_probabilities));
+	auto epsilon_norma_comparator = [&](double eps, double norma) -> bool {
+		return norma * sample_size < eps;
+	};
 	struct matrix_less {
 		inline bool operator()(const matrix& mx1, const matrix& mx2) const {
 			return mx1.norma() < mx2.norma();
 		}
 	};
+#ifndef NO_MULTISET
 	std::multimap<matrix, double, matrix_less> mset;
-	auto getter_function = mpiss::lsusst[sample_type];
+#endif
 	auto func = [&](matrix mx) -> double {
+#ifndef NO_MULTISET
 		auto [begin, end] = mset.equal_range(mx);
 		while (begin != end) {
 			if (begin->first == mx)
 				return begin->second;
 			begin++;
 		}
+#endif
 		unload_params(params, mx);
 		auto ans = t_manip.start_simulation_with_current_parameters(repeats, sample_size, initials);
 		double sum = 0;
-		for (size_t i = 0; i < sample_size; i++) {
-			sum += std::pow(getter_function(ans[i].first) - source_sample[i], 2);
+		for (auto& [sample_type,sample_col] : source_sample) {
+			for (size_t i = 0; i < sample_size; i++) {
+				double difference = ans[i].first[(size_t)sample_type] - sample_col[i];
+				sum += std::pow(difference * conversion_coeficient, 2);
+			}
 		}
+#ifndef NO_MULTISET
 		mset.insert({ mx, sum });
+#endif
+		printf("F: %lf\n", sum);
 		return sum;
 	};
-	return params_manipulator::simple_gradient_meth(func, first_approx, false);
+	return params_manipulator::differential_evolution(func, first_approx, 0.25, 0.15, 100, 0.1);
+	//return params_manipulator::simple_gradient_meth(func, first_approx, false, epsilon_norma_comparator, 1e-7);
 }
 
 struct comma final : std::numpunct<char> {
 	char do_decimal_point() const override { return ','; }
 };
 
-int __main() {
+std::map<mpiss::disease_state, std::vector<double>> get_sample(const std::wstring& filename) {
+	std::map<mpiss::disease_state, std::vector<double>> map;
+	std::ifstream in(filename, std::ios::in);
+	in.imbue(std::locale(std::locale::classic(), new comma));
+	std::string inp;
+	while (!in.eof()) {
+		std::getline(in, inp);
+		auto vec = mpiss::split(inp, ';');
+		if (vec.empty())
+			break;
+		for (int i = 0; i < mpiss::state_enum_size; i++) {
+			auto& str = vec[2 * i];
+			if (str.empty())
+				continue;
+			double value;
+			try {
+				value = std::stod(str);
+			}
+			catch (...) {
+				continue;
+			}
+			map[(mpiss::disease_state)i].push_back(value);
+		}
+	}
+	return map;
+}
+
+int ____main() {
 	int counter = 0;
 	auto func = [&](const matrix& v)->double {
-		auto innerfunc = [](double& v)->void {v = (v - 0.789865468); };
-		auto mat = v.apply(innerfunc);
-		mat.at(0, 0) *= 4;
+		auto innerfunc = [](double& v)->void {v = (v - 0.95448845461); };
+		auto mat = v;
+		mat.at(0, 0) *= 16;
+		mat.selfapply(innerfunc);
 		auto val = mat.norma();
-		//std::cout << "Func at " << v.transpose() << val << std::endl;
 		counter++;
 		return val;
 	};
 	matrix begin = { {0.1,0.23,0.17,0.24,0.51} };
-	auto end = params_manipulator::simple_gradient_meth(func, begin.transpose(), false);
+	auto end = params_manipulator::differential_evolution(func, begin.transpose(), 0.1, 0.15, 25, 0.000001);
 	std::cout << func(end) << std::endl;
 	std::cout << "Function call count: " << counter << std::endl;
 	return 0;
@@ -730,23 +911,27 @@ int __main() {
 int main() {
 	std::ios_base::sync_with_stdio(false); 
 	town_manipulator t_manip;
-	decltype(MOFD(L"", L"JSON Files(*.json)\0*.json\0")) files;
-	do {
-		files = MOFD(L"Get town info file\n", L"JSON Files(*.json)\0*.json\0");
-	} while (files.empty());
 
-	t_manip.t_builder.info_filename = files[0];
+
+	decltype(MOFD(L"", L"JSON Files(*.json)\0*.json\0")) town_info;
+	do {
+		town_info = MOFD(L"Get town info file\n", L"JSON Files(*.json)\0*.json\0");
+	} while (town_info.empty());
+
+	t_manip.t_builder.info_filename = town_info[0];
 
 	if (!t_manip.t_builder.load()) {
 		std::cout << t_manip.t_builder.last_error << std::endl;
+		return 1;
 	}
 	std::cout << t_manip.t_builder.warning_list << std::endl;
 
-	auto t_ptr = t_manip.t_builder.create_town();
+	t_manip.t_builder.built_town = t_manip.t_builder.create_town();
 	
+
 	decltype(MOFD(L"", L"Text Files(*.txt)\0*.txt\0")) params;
 	do {
-		params = MOFD(L"Get disease parameters\n", L"Text Files(*.txt)\0*.txt\0");
+		params = MOFD(L"Disease approximate parameters\n", L"Text Files(*.txt)\0*.txt\0");
 	} while (params.empty());
 
 	std::ifstream fin(params[0]);
@@ -757,21 +942,38 @@ int main() {
 		fin >> *ptr;
 	}
 
-	size_t reps = 100, iters=1000, initials=1;
+	matrix disease_params = load_params(vals);
+
+#ifndef IS_SAMPLE_CONSTRUCTION_BUILD
+	decltype(MOFD(L"", L"CSV Table(*.csv)\0*.csv\0")) target_sample;
+	do {
+		target_sample = MOFD(L"Get target sample\n", L"CSV Table(*.csv)\0*.csv\0");
+	} while (target_sample.empty());
+
+	auto sample = get_sample(target_sample[0]);
+#endif
+
+	size_t reps = 100, initials=1;
+
+#ifdef IS_SAMPLE_CONSTRUCTION_BUILD
+	size_t iters = 1000;
+	std::cout << "Iterations count: ";
+	std::cin >> iters;
+#endif
+
 	std::cout << "Approximate repeats count: ";
 	std::cin >> reps;
-	std::cout << "Amount of iterations: ";
-	std::cin >> iters;
 	std::cout << "Amount of initially ill: ";
 	std::cin >> initials;
+
 	std::vector<std::pair<point<mpiss::state_enum_size>, point<mpiss::state_enum_size>>> result;
 
+#ifdef IS_SAMPLE_CONSTRUCTION_BUILD
 	result = t_manip.start_simulation_with_current_parameters(reps, iters, initials);
 
 	std::ofstream fout("output.csv");
 
-	if (true)
-		fout.imbue(std::locale(std::locale::classic(), new comma));
+	fout.imbue(std::locale(std::locale::classic(), new comma));
 
 	for (auto& iter : result) {
 		for (size_t i = 0; i < mpiss::state_enum_size; i++) {
@@ -781,6 +983,9 @@ int main() {
 	}
 
 	fout.close();
-
+#else
+	auto parameters = find_closest_sample(sample, disease_params, t_manip, initials, reps);
+	std::cout << "Answer: \n" << parameters << std::endl;
+#endif
 	return 0;
 }

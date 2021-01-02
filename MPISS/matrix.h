@@ -57,12 +57,14 @@ public:
 	inline bool operator==(const matrix& rightMatrix) const;
 
 	inline matrix ppow(double p) const;
-	inline matrix sppow(double p);
+	inline matrix selfppow(double p);
 	inline matrix apply(const std::function<void(double&)>& func) const;
-	inline matrix sapply(const std::function<void(double&)>& func);
+	inline matrix selfapply(const std::function<void(double&)>& func);
+	inline matrix apply_indexed(const std::function<void(double&, size_t, size_t)>& func) const;
+	inline matrix selfapply_indexed(const std::function<void(double&, size_t, size_t)>& func);
 	inline double psum() const;
 	inline matrix pabs() const;
-	inline matrix spabs();
+	inline matrix selfpabs();
 	inline void normalize(double p = 2);
 	inline double norma(double p = 2) const;
 
@@ -520,11 +522,11 @@ inline bool matrix::operator<=(const matrix& comparation_m) const {
 
 inline matrix matrix::ppow(double p) const {
 	matrix mx(*this);
-	mx.sppow(p);
+	mx.selfppow(p);
 	return mx;
 }
 
-inline matrix matrix::sppow(double p) {
+inline matrix matrix::selfppow(double p) {
 	for (auto& line : _matrix)
 		for (auto& val : line)
 			val = std::pow(val, p);
@@ -533,11 +535,11 @@ inline matrix matrix::sppow(double p) {
 
 inline matrix matrix::pabs() const {
 	matrix mx(*this);
-	mx.spabs();
+	mx.selfpabs();
 	return mx;
 }
 
-inline matrix matrix::spabs() {
+inline matrix matrix::selfpabs() {
 	for (auto& line : _matrix)
 		for (auto& val : line)
 			val = std::abs(val);
@@ -552,7 +554,7 @@ inline double matrix::psum() const {
 	return s;
 }
 
-inline matrix matrix::sapply(const std::function<void(double&)>& func) {
+inline matrix matrix::selfapply(const std::function<void(double&)>& func) {
 	for (auto& line : _matrix)
 		for (auto& val : line)
 			func(val);
@@ -561,7 +563,20 @@ inline matrix matrix::sapply(const std::function<void(double&)>& func) {
 
 inline matrix matrix::apply(const std::function<void(double&)>& func) const {
 	matrix mx(*this);
-	mx.sapply(func);
+	mx.selfapply(func);
+	return mx;
+}
+
+inline matrix matrix::selfapply_indexed(const std::function<void(double&, size_t, size_t)>& func) {
+	for (size_t y = 0; y < rows(); y++)
+		for (size_t x = 0; x < cols(); x++)
+			func(at(x, y), y, x);
+	return *this;
+}
+
+inline matrix matrix::apply_indexed(const std::function<void(double&, size_t, size_t)>& func) const {
+	matrix mx(*this);
+	mx.selfapply_indexed(func);
 	return mx;
 }
 
