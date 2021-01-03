@@ -67,7 +67,7 @@ namespace mpiss {
 					for (int dis_st = 0; dis_st < state_enum_size; dis_st++)
 						counters[dis_st] += single_place.counters[dis_st];
 				}
-			counters[(size_t)mpiss::disease_state::dead] = cem->deads.size();
+			counters[(size_t)mpiss::disease_state::dead] = (double)cem->deads.size();
 		}
 		void move_cells() {
 			bool flag_back_move = false;
@@ -84,7 +84,7 @@ namespace mpiss {
 
 							auto& shedule = (*cell_ptr->shedule)[cell_ptr->cur_shedule];
 							auto& place_type_ref = places[shedule.type];
-							double place_type_amount = place_type_ref.size();
+							double place_type_amount = (double)place_type_ref.size();
 							auto place_room_id = shedule.get_rand_id();
 							place_room_id = std::clamp(place_room_id, 0., place_type_amount-1);
 							cell_ptr->prev_shedule = cell_ptr->cur_shedule;

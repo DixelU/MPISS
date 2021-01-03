@@ -32,17 +32,29 @@ namespace mpiss {
 			for (auto& cur_cell : cells)
 				cur_cell->set_next_iter_state();
 
+			const size_t predefined_contact_nuumber = (size_t)std::ceil((*contact_probability) * cells.size());
+			for (size_t i = 0; i < predefined_contact_nuumber; i++) {
+				size_t rnd_id1 = size_t(erand() * cells.size());
+				auto rnd_it = cells.begin() + rnd_id1;
+				if ((*rnd_it)->next_disease_state != mpiss::disease_state::healthy)
+					continue;
+				size_t rnd_id2 = size_t(erand() * cells.size());
+				auto it = cells.begin() + rnd_id2;
+				single_contact(it, rnd_it);
+			}
+
+			/*
 			for (auto it = cells.begin(); it != cells.end(); it++) {
 				double rnd = erand();
 				if (rnd < *contact_probability) {
-					size_t rnd_id = erand() * cells.size();
+					size_t rnd_id = size_t(erand() * cells.size());
 					auto rnd_it = cells.begin() + rnd_id;
 					if ((*rnd_it)->next_disease_state != mpiss::disease_state::healthy)
 						continue;
 					single_contact(it, rnd_it);
 				}
 			}
-
+			*/
 			for (auto it = cells.begin(); it != cells.end(); it++) {
 				if ((*it)->cur_disease_state == disease_state::dead)
 					_buffer_list.push_back(it - cells.begin());

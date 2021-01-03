@@ -9,19 +9,22 @@
 #include <list>
 #include <iostream>
 #include <vector>
+
 #include <random>
+#include <time.h>
+#include <thread>
+
 #include <cmath>
 #include <mutex>
 
+#if defined (_MSC_VER)  // Visual studio
+#define thread_local __declspec( thread )
+#elif defined (__GCC__) // GCC
+#define thread_local __thread
+#endif
+
 namespace mpiss {
 	namespace __utils {
-		struct grand {
-			std::random_device rd{};
-			std::mt19937 gen{ rd() };
-			std::normal_distribution<> d{ 0,1 };
-			std::recursive_mutex locker;
-		};
-		grand __gr;
 
 		bool is_number(const std::wstring& s) { 
 			auto it = s.begin();
@@ -29,14 +32,21 @@ namespace mpiss {
 			return s.size() && it == s.end();
 		}
 	}
-	double nrand() {
-		__utils::__gr.locker.lock();
-		auto rval = __utils::__gr.d(__utils::__gr.gen);
-		__utils::__gr.locker.unlock();
-		return rval;
-	}
 	double erand() {
-		return __utils::__gr.gen() / (double(0xFFFFFFFFu));
+		constexpr uint32_t max = 0xFFFFFFFFu;
+		static thread_local std::mt19937* generator = nullptr;
+		if (!generator) {
+			std::hash<std::thread::id> hasher;
+			generator = new std::mt19937(clock() + hasher(std::this_thread::get_id()));
+		}
+		std::uniform_int_distribution<uint32_t> distribution(0, max);
+		return distribution(*generator) / (double(max));
+	}
+	double nrand() {
+		double u = 0, v = 0;
+		while (u == 0) u = erand();
+		while (v == 0) v = erand();
+		return std::sqrt(-2.0 * std::log(u))* std::cos(2 * std::_Pi * v);
 	}
 
 	template<typename b_str_type>
