@@ -13,10 +13,10 @@ namespace mpiss {
 			if (branches.empty())
 				return cur_state;
 			auto prob = 0.;
-			for (const auto& ds : branches) {
-				prob = (1. - prob) * ds.second;
+			for (const auto& [state, probability] : branches) {
+				prob += probability;
 				if (rnd < prob)
-					return ds.first;
+					return state;
 			}
 			return cur_state;
 		}

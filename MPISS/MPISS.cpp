@@ -34,22 +34,23 @@ mpiss::probability_disease_progress regular_progress_builder(){
 		});
 	mpiss::single_prob_branch f_hs({//hidden_spreading
 		{mpiss::disease_state::active_spread,  mpiss::erand() * 0.1},
+		{mpiss::disease_state::spreading_immune,  mpiss::erand() * 0.1},
 		});
 	mpiss::single_prob_branch f_as({//active_spread
 		{mpiss::disease_state::spreading_immune,  mpiss::erand() * 0.1},
+		{mpiss::disease_state::dead,  mpiss::erand() * 0.1}
 		});
 	mpiss::single_prob_branch f_si({//spreading_immune
-		{mpiss::disease_state::immune,  mpiss::erand() * 0.1},
-		{mpiss::disease_state::dead,  mpiss::erand() * 0.1}
+		{mpiss::disease_state::immune,  mpiss::erand() * 0.1}
 		});
 	mpiss::single_prob_branch f_i({//immune
 		{mpiss::disease_state::healthy,  mpiss::erand() * 0.1}
 		});
 	auto vec = std::vector<mpiss::single_prob_branch>{ f_h, f_hns, f_hs, f_as, f_si, f_i, f_h };
 	auto prog = mpiss::probability_disease_progress(
-		std::vector<decltype(vec)>(mpiss::age_enum_size)
+		std::vector<decltype(vec)>(mpiss::age_enum_size, vec)
 	);
-	prog.data[(int)mpiss::age_type::mature] = vec;
+	//prog.data[(int)mpiss::age_type::mature] = vec;
 	return prog;
 }
 
@@ -554,6 +555,7 @@ matrix find_closest_sample(
 	const size_t sample_size = source_sample.begin()->second.size();
 	t_manip.t_builder.built_town->update_counters();
 	const size_t town_size = (size_t)(t_manip.t_builder.built_town->counters[(size_t)mpiss::disease_state::healthy]);
+	uint32_t function_call_counter = 0;
 	const double conversion_coeficient = 1. / town_size;
 	auto params = get_all_parameters(*t_manip.t_builder.pdp, *t_manip.t_builder.state_spread_modifier, *(t_manip.t_builder.contact_probabilities));
 	auto epsilon_norma_comparator = [&](double eps, double norma) -> bool {
@@ -588,10 +590,11 @@ matrix find_closest_sample(
 #ifndef NO_MULTISET
 		mset.insert({ mx, sum });
 #endif
-		printf("F: %lf\n", sum);
+		function_call_counter++;
+		printf("#%u F: %lf\n", sum);
 		return sum;
 	};
-	return params_manipulator::differential_evolution(func, first_approx, 0.35, 0.15, 200, 0.1);
+	return params_manipulator::differential_evolution(func, first_approx, 0.10, 0.15, 200, 0.001);
 	//return params_manipulator::simple_gradient_meth(func, first_approx, false, epsilon_norma_comparator, 1e-7);
 }
 
@@ -626,25 +629,32 @@ std::map<mpiss::disease_state, std::vector<double>> get_sample(const std::wstrin
 	return map;
 }
 
-int __main() {
+int main() {
 	int counter = 0;
 	auto func = [&](const matrix& v)->double {
 		auto innerfunc = [](double& v, size_t x, size_t y)->void {v = v - 0.075*x - 0.0945454*y; };
 		auto mat = v;
 		mat.at(0, 0) *= 16;
 		mat.selfapply_indexed(innerfunc);
-		auto val = mat.norma(0.054886);
+		auto val = mat.norma(); //+ mpiss::erand()*0.05;
 		counter++;
 		return val;
 	};
-	matrix begin = { {0.1,0.23,0.17,0.24,0.51} };
-	auto end = params_manipulator::differential_evolution(func, begin.transpose(), 0.25, 0.15, 200, 0.000001);
+	matrix begin = { 
+		{0.1,0.23,0.17,0.24,0.51},
+		{0.1,0.23,0.17,0.24,0.51},
+		{0.1,0.23,0.17,0.24,0.51},
+		{0.1,0.23,0.17,0.24,0.51},
+		{0.1,0.23,0.17,0.24,0.51},
+		{0.1,0.23,0.17,0.24,0.51}
+	};
+	auto end = params_manipulator::differential_evolution(func, begin.transpose(), 1., 0.15, 200, 0.000001);
 	std::cout << func(end) << std::endl;
 	std::cout << "Function call count: " << counter << std::endl;
 	return 0;
 }
 
-int main() {
+int ___main() {
 	std::ios_base::sync_with_stdio(false); 
 	town_manipulator t_manip;
 

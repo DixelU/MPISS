@@ -40,7 +40,7 @@ namespace mpiss {
 			generator = new std::mt19937(clock() + hasher(std::this_thread::get_id()));
 		}
 		std::uniform_int_distribution<uint32_t> distribution(0, max);
-		return distribution(*generator) / (double(max));
+		return distribution(*generator) / (double(max) + 1.);
 	}
 	double nrand() {
 		double u = 0, v = 0;

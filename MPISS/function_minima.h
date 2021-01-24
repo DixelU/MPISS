@@ -212,63 +212,45 @@ struct params_manipulator {
 	inline static matrix extended_annealing(
 		std::function<double(const matrix&)> func,
 		matrix sample,
-		double initial_sample_siggling,
+		double initial_sample_wiggling,
 		double wiggle_decay_coef,
-		double wiggle_probability,
-		double portion_of_nonwiggleable_matixes,
 		size_t entries_amount,
 		double epsilon = 1e-10
 	) {
-		double cur_wiggle_coef = initial_sample_siggling;
+		double cur_wiggle_coef = initial_sample_wiggling;
 		std::vector<matrix> entries;
-		std::vector<matrix> buffer_entries;
-		std::vector<std::pair<double, int>> rate_vec;
+		std::vector<double> func_values;
 		entries.resize(entries_amount, sample);
-		rate_vec.resize(entries_amount, { 0.,0 });
-		size_t wiggleable_matixes = size_t(entries_amount * portion_of_nonwiggleable_matixes);
+		func_values.resize(entries_amount, INFINITY);
 
-		auto mx_wiggle_sapply_func = [&](double& val) {
-			if (mpiss::erand() > wiggle_probability)
-				return;
-			val = std::clamp(val + mpiss::nrand() * cur_wiggle_coef, 0., 1.);
-		};
-
-		for (auto& mx : entries) {
-			mx.selfapply([&](double& v) {
-				if (mpiss::erand() > wiggle_probability)
-					return;
-				v = std::clamp(mpiss::nrand() * initial_sample_siggling, 0., 1.); }
-			);
-		}
+		matrix wiggle_mx = sample;
 
 		while (cur_wiggle_coef > epsilon) {
+			auto min = std::min_element(func_values.begin(), func_values.end());
+
+			printf("Current minima: %lf\n", *min);
+			printf("Current wiggle coef: %lf\n", cur_wiggle_coef);
+			std::cout << std::endl << entries[min - func_values.begin()] << std::endl;
+
 			for (size_t i = 0; i < entries_amount; i++) {
-				double val = func(entries[i]);
-				rate_vec[i] = { val, i };
+				wiggle_mx.selfapply([&](double& v) {
+					v = mpiss::erand() - 0.5;
+				});
+				wiggle_mx.normalize();
+				auto new_approx = entries[i] + wiggle_mx * cur_wiggle_coef;
+				double func_val = func(new_approx);
+				double prob = std::exp(-(func_val - func_values[i]) / cur_wiggle_coef);
+				bool random_jump = mpiss::erand() < prob;
+				if (func_val < func_values[i] || random_jump) {
+					func_values[i] = func_val;
+					wiggle_mx.swap(entries[i]);
+				}
 			}
 			cur_wiggle_coef *= wiggle_decay_coef;
-
-			std::sort(rate_vec.begin(), rate_vec.end());
-
-			printf("Current minima: %lf\n", rate_vec.front().first);
-			printf("Current wiggle coef: %lf\n", cur_wiggle_coef);
-			std::cout << std::endl << entries[rate_vec.front().second] << std::endl;
-
-			for (size_t i = wiggleable_matixes; i < entries_amount; i++) {
-				auto& [value, id] = rate_vec[i];
-				size_t source_id = size_t(mpiss::erand() * wiggleable_matixes);
-				entries[id] = entries[source_id].apply(mx_wiggle_sapply_func);
-			}
 		}
+		auto min = std::min_element(func_values.begin(), func_values.end());
 
-		for (size_t i = 0; i < entries_amount; i++) {
-			double val = func(entries[i]);
-			rate_vec[i] = { val, i };
-		}
-
-		std::sort(rate_vec.begin(), rate_vec.end());
-
-		return entries[rate_vec.front().second];
+		return entries[min - func_values.begin()];
 	}
 };
 

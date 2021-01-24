@@ -20,7 +20,7 @@ namespace mpiss {
 			dp_module(dp_module) {
 			value = erand();
 		}
-		inline virtual void reset() {
+		virtual void reset() {
 			cur_disease_state = mpiss::disease_state::healthy;
 			next_disease_state = mpiss::disease_state::healthy;
 			time_since_contact = -1;
