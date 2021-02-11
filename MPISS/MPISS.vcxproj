@@ -86,6 +86,18 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
+  <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <VcpkgUseStatic>true</VcpkgUseStatic>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <VcpkgUseStatic>true</VcpkgUseStatic>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <VcpkgUseStatic>true</VcpkgUseStatic>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <VcpkgUseStatic>true</VcpkgUseStatic>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -165,9 +177,12 @@
     <ClCompile Include="MPISS.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="dotted_plotter.h" />
     <ClInclude Include="exprtk_wrapper.h" />
+    <ClInclude Include="access_method_data.h" />
     <ClInclude Include="mpiss_cell.h" />
     <ClInclude Include="mpiss_cemetery.h" />
+    <ClInclude Include="MPISS_main.h" />
     <ClInclude Include="__mpiss_disease_progress_line.h" />
     <ClInclude Include="mpiss_header.h" />
     <ClInclude Include="mpiss_room.h" />

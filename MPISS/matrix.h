@@ -1,4 +1,7 @@
 #pragma once
+#ifndef MATRIX_H
+#define MATRIX_H
+
 #include <Windows.h>
 #include <algorithm>
 #include <iostream>
@@ -591,3 +594,5 @@ inline double matrix::norma(double p) const {
 			sum += std::pow(std::abs(val),p);
 	return std::pow(sum, 1. / p);
 }
+
+#endif 

@@ -101,7 +101,8 @@ struct params_manipulator {
 		std::function<bool(double, double)> norma_comparator = [](double eps, double norma)->bool {return norma < eps; },
 		double epsilon = 1e-10
 	) {
-		matrix prev;
+		static matrix prev;
+		static double func_value;
 		do {
 			auto grad = (gradient(func, begin)) * (-1);
 			//std::cout << "Orig step: " << grad.transpose() << std::endl;
@@ -113,7 +114,7 @@ struct params_manipulator {
 			//std::cout << "Final step: " << D.transpose() << std::endl;
 
 			auto odfunc = [&](double p) -> double {
-				return func(begin + p * D);
+				return func_value = func(begin + p * D);
 			};
 
 			double a, b;
@@ -141,6 +142,7 @@ struct params_manipulator {
 		} while (true);
 		return begin;
 	}
+
 	inline static matrix differential_evolution(
 		std::function<double(const matrix&)> func,
 		matrix sample,
@@ -149,8 +151,8 @@ struct params_manipulator {
 		size_t entries_amount,
 		double epsilon = 1e-10
 	) {
-		std::vector<matrix> entries;
-		std::vector<double> func_values;
+		static std::vector<matrix> entries;
+		static std::vector<double> func_values;
 		entries.resize(entries_amount, sample);
 		func_values.resize(entries_amount, 1e127);
 
@@ -209,6 +211,7 @@ struct params_manipulator {
 		} while (max - min > epsilon);
 		return entries[min_id];
 	}
+
 	inline static matrix extended_annealing(
 		std::function<double(const matrix&)> func,
 		matrix sample,
@@ -218,8 +221,8 @@ struct params_manipulator {
 		double epsilon = 1e-10
 	) {
 		double cur_wiggle_coef = initial_sample_wiggling;
-		std::vector<matrix> entries;
-		std::vector<double> func_values;
+		static std::vector<matrix> entries;
+		static std::vector<double> func_values;
 		entries.resize(entries_amount, sample);
 		func_values.resize(entries_amount, INFINITY);
 
