@@ -6,6 +6,7 @@
 #include "header_utils.h"
 
 struct HandleableUIPart {
+	using lock_guard = std::lock_guard<std::recursive_mutex>;
 	std::recursive_mutex Lock;
 	BIT Enabled;
 	HandleableUIPart() {}

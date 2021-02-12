@@ -13,16 +13,19 @@
 #include <locale>
 
 #include "SAFGUIF/SAFGUIF.h"
+#include "dotted_plotter.h"
 
 #include "MPISS_main.h"
 
 void Init() {
 	MoveableWindow* T = new MoveableResizeableWindow("Main window", System_White, -200, 200, 400, 400, 0, 0x3F3F3F7F, 0);
-	((MoveableResizeableWindow*)T)->AssignMinDimentions(300, 300);
+	((MoveableResizeableWindow*)T)->AssignMinDimentions(400, 400);
 	
+	(*T)["PLOTTER"] = new DottedPlotter(0, 0, 300, 300, 5, System_White, 0x00FFFFDF, 0x7F7F7F1F, 0x7F7F7F7F);
+
 	(*WH)["MAIN"] = T;
 
-	__main();
+	//__main();
 }
 
 ///////////////////////////////////////

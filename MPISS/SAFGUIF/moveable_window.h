@@ -18,6 +18,7 @@ struct MoveableWindow :HandleableUIPart {
 	BIT HoveredCloseButton;
 	BIT CursorFollowMode;
 	BIT HUIP_MapWasChanged;
+	BIT IsCloseable;
 	float PCurX, PCurY;
 	~MoveableWindow() override {
 		Lock.lock();
@@ -46,6 +47,7 @@ struct MoveableWindow :HandleableUIPart {
 		this->Drawable = 1;
 		this->PCurX = 0.;
 		this->PCurY = 0.;
+		this->IsCloseable = true;
 	}
 	void KeyboardHandler(char CH) {
 		Lock.lock();
@@ -66,7 +68,7 @@ struct MoveableWindow :HandleableUIPart {
 		}
 		HoveredCloseButton = 0;
 		if (mx > XWindowPos + Width - WindowHeapSize && mx < XWindowPos + Width && my < YWindowPos && my > YWindowPos - WindowHeapSize) {///close button
-			if (Button && State == 1) {
+			if (IsCloseable && Button && State == 1) {
 				Drawable = 0;
 				CursorFollowMode = false;
 				Lock.unlock();

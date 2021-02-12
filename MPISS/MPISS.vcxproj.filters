@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Файлы заголовков\SAFGUIF">
+      <UniqueIdentifier>{40a7861d-57dc-4769-9f4d-38d7b93023af}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="MPISS.cpp">
@@ -55,6 +58,72 @@
     </ClInclude>
     <ClInclude Include="access_method_data.h">
       <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\button.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\button_settings.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\charmap.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\checkbox.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\consts.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\editbox.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\fonted_manip.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\handleable_ui_part.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\header_utils.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\input_field.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\movable_resizeable_window.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\moveable_window.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\SAFGUIF.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\single_text_line.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\single_text_line_settings.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\snp_list.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\special_signs.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\stls_presets.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\symbols.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\textbox.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\wheel_variable_changer.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
+    </ClInclude>
+    <ClInclude Include="SAFGUIF\windows_handler.h">
+      <Filter>Файлы заголовков\SAFGUIF</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

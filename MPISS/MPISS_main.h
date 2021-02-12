@@ -27,6 +27,8 @@
 
 #include "matrix.h"
 
+#include "access_method_data.h"
+
 
 enum class minimization_method {
 	gradient,
