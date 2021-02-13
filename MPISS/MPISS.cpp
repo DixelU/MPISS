@@ -18,10 +18,23 @@
 #include "MPISS_main.h"
 
 void Init() {
-	MoveableWindow* T = new MoveableResizeableWindow("Main window", System_White, -200, 200, 400, 400, 0, 0x3F3F3F7F, 0);
-	((MoveableResizeableWindow*)T)->AssignMinDimentions(400, 400);
-	
-	(*T)["PLOTTER"] = new DottedPlotter(0, 0, 300, 300, 5, System_White, 0x00FFFFDF, 0x7F7F7F1F, 0x7F7F7F7F);
+	auto DP = new DottedPlotter(0, 0, 300, 300, 5, 5, System_White, 0x00FFFFDF, 0x7F7F7F1F, 0x7F7F7F7F, true);
+
+	std::vector<matrix> *mxs = new std::vector<matrix>{ matrix({std::vector<double>{1.1, 1.4}}), matrix({std::vector<double>{1.2, 1.9}}), matrix({std::vector<double>{1.4, 7.7}}) };
+	std::vector<double>* vals = new std::vector<double>{ 0.5, 0.6, 0.4 };;
+
+	DP->amd->get_param_callback = [mxs](int i) -> matrix& {return (*mxs)[i]; };
+	DP->amd->get_value_callback = [vals](int i) -> double {return (*vals)[i]; };
+	DP->amd->size_callback = [mxs, vals]() -> int {return std::min((*mxs).size(), (*vals).size()); };
+	DP->amd->is_alive = true;
+
+	MoveableWindow* T = new MoveableResizeableWindow("Main window", System_White, -200, 200, 400, 400, 0, 0x3F3F3F7F, 0, [DP](float dH, float dW, float NewHeight, float NewWidth) {
+		DP->SafeMove(0.5 * dW, -0.5 * dH);
+		DP->SafeResize(NewHeight - 100, NewWidth - 100);
+		});
+	((MoveableResizeableWindow*)T)->AssignMinDimentions(200, 200);
+
+	(*T)["PLOTTER"] = DP;	
 
 	(*WH)["MAIN"] = T;
 
