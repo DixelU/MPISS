@@ -31,12 +31,11 @@
 
 
 enum class minimization_method {
-	gradient,
 	differential_evolution, 
-	extended_annealing
+	extended_annealing,
+	gradient,
 };
 
-//#define IS_SAMPLE_CONSTRUCTION_BUILD
 #define NO_MULTISET
 
 mpiss::probability_disease_progress regular_progress_builder() {
@@ -566,6 +565,7 @@ matrix find_closest_sample(
 	access_method_data* amd,
 	minimization_method method
 ) {
+	std::cout << initials << " " << repeats << std::endl;
 	const size_t sample_size = source_sample.begin()->second.size();
 	t_manip.t_builder.built_town->update_counters();
 	const size_t town_size = (size_t)(t_manip.t_builder.built_town->counters[(size_t)mpiss::disease_state::healthy]);
@@ -605,25 +605,23 @@ matrix find_closest_sample(
 		mset.insert({ mx, sum });
 #endif
 		function_call_counter++;
-		printf("#%u F: %lf\n", sum);
+		printf("F: %lf\n", sum);
 		return sum;
 	};
 
 	switch (method) {
 	case minimization_method::gradient:
-		return params_manipulator::simple_gradient_meth(func, first_approx, false, epsilon_norma_comparator, 1e-8);
+		return params_manipulator::simple_gradient_meth(func, first_approx, false, epsilon_norma_comparator, 1e-8, amd);
 		break;
 	case minimization_method::differential_evolution:
-		return params_manipulator::differential_evolution(func, first_approx, 0.35, 0.15, 200, 0.0001);
+		return params_manipulator::differential_evolution(func, first_approx, 0.35, 0.15, 200, 0.0001, amd);
 		break;
 	case minimization_method::extended_annealing:
-		return params_manipulator::extended_annealing(func, first_approx, 0.35, 0.995, 200, 0.0001);
-		break;
-	default:
+		return params_manipulator::extended_annealing(func, first_approx, 0.35, 0.995, 200, 0.0001, amd);
 		break;
 	}
-
-	//
+	return
+		first_approx;
 }
 
 struct comma final : std::numpunct<char> {
@@ -657,16 +655,19 @@ std::map<mpiss::disease_state, std::vector<double>> get_sample(const std::wstrin
 	return map;
 }
 
-int __main() {
+matrix SimpleExample(access_method_data* amd, minimization_method method) {
 	int counter = 0;
 	auto func = [&](const matrix& v)->double {
 		auto innerfunc = [](double& v, size_t x, size_t y)->void {v = v - 0.075 * x - 0.0945454 * y; };
 		auto mat = v;
 		mat.at(0, 0) *= 16;
 		mat.selfapply_indexed(innerfunc);
-		auto val = mat.norma(); //+ mpiss::erand()*0.05;
+		auto val = mat.norma(0.45) + mpiss::erand()*0.5;
 		counter++;
 		return val;
+	};
+	auto epsilon_norma_comparator = [&](double eps, double norma) -> bool {
+		return norma < eps;
 	};
 	matrix begin = {
 		{0.1,0.23,0.17,0.24,0.51},
@@ -676,13 +677,21 @@ int __main() {
 		{0.1,0.23,0.17,0.24,0.51},
 		{0.1,0.23,0.17,0.24,0.51}
 	};
-	auto end = params_manipulator::extended_annealing(func, begin, 0.35, 0.995, 200, 0.0001);
-	std::cout << func(end) << std::endl;
-	std::cout << "Function call count: " << counter << std::endl;
-	return 0;
+	switch (method) {
+	case minimization_method::gradient:
+		return params_manipulator::simple_gradient_meth(func, begin, false, epsilon_norma_comparator, 1e-8, amd);
+		break;
+	case minimization_method::differential_evolution:
+		return params_manipulator::differential_evolution(func, begin, 0.35, 0.15, 200, 1e-8, amd);
+		break;
+	case minimization_method::extended_annealing:
+		return params_manipulator::extended_annealing(func, begin, 0.35, 0.995, 200, 1e-8, amd);
+		break;
+	}
+	return begin;
 }
 
-int Start(access_method_data* amd) {
+int StartSimulationProcess(access_method_data* amd, minimization_method method, size_t reps, size_t initials, size_t iters = 0) {
 	town_manipulator t_manip;
 
 	decltype(MOFD(L"", L"JSON Files(*.json)\0*.json\0")) town_info;
@@ -725,19 +734,6 @@ int Start(access_method_data* amd) {
 	auto sample = get_sample(target_sample[0]);
 #endif
 
-	size_t reps = 100, initials = 1;
-
-#ifdef IS_SAMPLE_CONSTRUCTION_BUILD
-	size_t iters = 1000;
-	std::cout << "Iterations count: ";
-	std::cin >> iters;
-#endif
-
-	std::cout << "Approximate repeats count: ";
-	std::cin >> reps;
-	std::cout << "Amount of initially ill: ";
-	std::cin >> initials;
-
 	std::vector<std::pair<point<mpiss::state_enum_size>, point<mpiss::state_enum_size>>> result;
 
 #ifdef IS_SAMPLE_CONSTRUCTION_BUILD
@@ -755,8 +751,9 @@ int Start(access_method_data* amd) {
 	}
 
 	fout.close();
+	std::cout << "Resulting file was printed out" << std::endl;
 #else
-	auto parameters = find_closest_sample(sample, disease_params, t_manip, initials, reps, amd, minimization_method::extended_annealing);
+	auto parameters = find_closest_sample(sample, disease_params, t_manip, initials, reps, amd, method);
 	std::cout << "Answer: \n" << parameters << std::endl;
 #endif
 	return 0;

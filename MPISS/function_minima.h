@@ -6,6 +6,7 @@
 #include <functional>
 #include "matrix.h"
 #include "mpiss_header.h"
+#include "access_method_data.h"
 
 struct params_manipulator {
 	inline static matrix gradient(std::function<double(const matrix&)> f, const matrix& p) {
@@ -54,7 +55,7 @@ struct params_manipulator {
 			return { false, {}, 0, 0 };
 		return { true, modifiedD, newtop, newbottom };
 	}
-	inline static double onedim_minimistaion(std::function<double(double)> func, double a, double b, double Eps = 0.001) {
+	inline static std::pair<double, double> onedim_minimistaion(std::function<double(double)> func, double a, double b, double Eps = 0.001) {
 		constexpr double tau = 0.61803398874989484820458683436564;
 		double x, y, fx, fy;
 		x = a + (1 - tau) * (b - a);
@@ -76,7 +77,7 @@ struct params_manipulator {
 				fx = func(x);
 			}
 		}
-		return 0.5 * (a + b);
+		return { 0.5 * (a + b), 0.5 * (fx + fy) };
 	}
 	//**  minima and h  **//
 	inline static std::pair<double, double> onedim_grid_minima(std::function<double(double)> func, double a, double b, int n = 6, double Eps = 0.001) {
@@ -99,10 +100,23 @@ struct params_manipulator {
 		matrix begin,
 		bool attempt_global_minimization,
 		std::function<bool(double, double)> norma_comparator = [](double eps, double norma)->bool {return norma < eps; },
-		double epsilon = 1e-10
+		double epsilon = 1e-10, 
+		access_method_data* amd = nullptr
 	) {
+		static std::deque<std::pair<matrix, double>> buffer;
+		buffer.clear();
 		static matrix prev;
 		static double func_value;
+
+		buffer.clear();
+
+		if (amd) {
+			amd->size_callback = []()->int { return buffer.size(); };
+			amd->get_value_callback = [](int i)->double {return buffer[i].second; };
+			amd->get_param_callback = [](int i)->matrix& {return buffer[i].first; };
+			amd->is_alive = true;
+		}
+
 		do {
 			auto grad = (gradient(func, begin)) * (-1);
 			//std::cout << "Orig step: " << grad.transpose() << std::endl;
@@ -127,10 +141,18 @@ struct params_manipulator {
 				a = bottom;
 				b = top;
 			}
-			auto local_minima = onedim_minimistaion(odfunc, a, b, epsilon);
+			auto [arg_minima, func_minima] = onedim_minimistaion(odfunc, a, b, epsilon);
 			prev = (begin);
-			auto next_step = D * local_minima;
+			auto next_step = D * arg_minima;
 			begin += next_step;
+
+			if (amd) {
+				amd->locker.lock();
+				if (buffer.size() == 200)
+					buffer.pop_front();
+				buffer.push_back({ begin, func_minima });
+				amd->locker.unlock();
+			}
 
 			if (norma_comparator(epsilon, next_step.norma(2)))
 				break;
@@ -149,12 +171,22 @@ struct params_manipulator {
 		double initial_wiggle_coef,
 		double replace_index_probability,
 		size_t entries_amount,
-		double epsilon = 1e-10
+		double epsilon = 1e-10,
+		access_method_data* amd = nullptr
 	) {
 		static std::vector<matrix> entries;
 		static std::vector<double> func_values;
+		entries.clear();
+		func_values.clear();
 		entries.resize(entries_amount, sample);
 		func_values.resize(entries_amount, 1e127);
+
+		if (amd) {
+			amd->size_callback = []()->int { return entries.size(); };
+			amd->get_value_callback = [](int i)->double {return func_values[i]; };
+			amd->get_param_callback = [](int i)->matrix& {return entries[i]; };
+			amd->is_alive = true;
+		}
 
 		auto mutate = [&](size_t mx_id) -> matrix {
 			double coef = mpiss::erand() * 2;
@@ -191,8 +223,12 @@ struct params_manipulator {
 				auto new_approx = mutate(i);
 				auto new_value = func(new_approx);
 				if (new_value < func_values[i]) {
+					if (amd)
+						amd->locker.lock();
 					entries[i] = new_approx;
 					func_values[i] = new_value;
+					if (amd)
+						amd->locker.unlock();
 				}
 				else
 					new_value = func_values[i];
@@ -207,8 +243,9 @@ struct params_manipulator {
 			}
 			printf("Range: %lf\n", max - min);
 			printf("New minima: %lf\n", min);
-			std::cout << std::endl << entries[min_id] << std::endl;
+			//std::cout << std::endl << entries[min_id] << std::endl;
 		} while (max - min > epsilon);
+		std::cout << std::endl << entries[min_id] << std::endl;
 		return entries[min_id];
 	}
 
@@ -218,13 +255,23 @@ struct params_manipulator {
 		double initial_sample_wiggling,
 		double wiggle_decay_coef,
 		size_t entries_amount,
-		double epsilon = 1e-10
+		double epsilon = 1e-10,
+		access_method_data* amd = nullptr
 	) {
 		double cur_wiggle_coef = initial_sample_wiggling;
 		static std::vector<matrix> entries;
 		static std::vector<double> func_values;
+		entries.clear();
+		func_values.clear();
 		entries.resize(entries_amount, sample);
 		func_values.resize(entries_amount, INFINITY);
+
+		if (amd) {
+			amd->size_callback = []()->int { return entries.size(); };
+			amd->get_value_callback = [](int i)->double {return func_values[i]; };
+			amd->get_param_callback = [](int i)->matrix& {return entries[i]; };
+			amd->is_alive = true;
+		}
 
 		matrix wiggle_mx = sample;
 
@@ -245,8 +292,10 @@ struct params_manipulator {
 				double prob = std::exp(-(func_val - func_values[i]) / cur_wiggle_coef);
 				bool random_jump = mpiss::erand() < prob;
 				if (func_val < func_values[i] || random_jump) {
+					amd->locker.lock();
 					func_values[i] = func_val;
 					wiggle_mx.swap(entries[i]);
+					amd->locker.unlock();
 				}
 			}
 			cur_wiggle_coef *= wiggle_decay_coef;

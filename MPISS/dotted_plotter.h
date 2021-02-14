@@ -14,24 +14,28 @@ struct DottedPlotter : HandleableUIPart {
 	using STLptr = SingleTextLine*;
 	access_method_data *amd;
 	int mx_x, mx_y;
-	float plotter_xpos, plotter_ypos;
-	float plotter_width, plotter_height;
-	float mouse_x, mouse_y;
-	float mouse_cx, mouse_cy; // converted
+	double plotter_xpos, plotter_ypos;
+	double plotter_width, plotter_height;
+	double mouse_x, mouse_y;
+	double mouse_cx, mouse_cy; // converted
 	bool is_fixed_aspect_ratio, is_hovered;
 	int points_size;
-	float outter_margin;
+	double outter_margin;
 	int grid_rel_depth;
+	int closest_to_pointer_param;
 	DWORD points_color, lines_color, bright_lines_color;
 	STLptr left_top_indicator, left_bottom_indicator, bottom_left_indicator, bottom_right_indicator, indicator_top, indicator_right;
-	std::vector<std::pair<float, float>> points;
-	float internal_width, internal_height;
-	float internal_center_x, internal_center_y;
-	float indicator_x, indicator_y;
+	std::vector<std::pair<double, double>> points;
+	std::function<void(const matrix&)> on_click;
+	double internal_width, internal_height;
+	double internal_center_x, internal_center_y;
+	double indicator_x, indicator_y;
+	double closest_param_x, closest_param_y;
+	double max_value;
 	~DottedPlotter() override {
 		amd->is_alive = false;
 	}
-	DottedPlotter(float xpos, float ypos, float width, float height, int points_size, float outter_margin, SingleTextLineSettings* STLS, DWORD points_color, DWORD lines_color, DWORD bright_lines_color, bool is_fixed_aspect_ratio = true) :
+	DottedPlotter(double xpos, double ypos, double width, double height, int points_size, double outter_margin, SingleTextLineSettings* STLS, DWORD points_color, DWORD lines_color, DWORD bright_lines_color, bool is_fixed_aspect_ratio = true, std::function<void(const matrix&)> OnClick = [](const matrix& mx) {}) :
 		left_top_indicator(STLS->CreateOne()), left_bottom_indicator(STLS->CreateOne()),
 		bottom_left_indicator(STLS->CreateOne()), bottom_right_indicator(STLS->CreateOne()),
 		indicator_top(STLS->CreateOne()), indicator_right(STLS->CreateOne()),
@@ -39,7 +43,7 @@ struct DottedPlotter : HandleableUIPart {
 		points_color(points_color), lines_color(lines_color), bright_lines_color(bright_lines_color),
 		points_size(points_size), internal_width(1), internal_height(1), internal_center_x(1), internal_center_y(1),
 		mouse_x(0), mouse_y(0), is_hovered(false), is_fixed_aspect_ratio(is_fixed_aspect_ratio), grid_rel_depth(3),
-		outter_margin(outter_margin), mx_x(0), mx_y(0)
+		outter_margin(outter_margin), mx_x(0), mx_y(0), closest_to_pointer_param(-1), closest_param_x(NAN), closest_param_y(NAN)
 	{
 		amd = new access_method_data;
 	}
@@ -48,18 +52,37 @@ struct DottedPlotter : HandleableUIPart {
 		if (!amd->is_alive)
 			return;
 		points.clear();
+
+		amd->locker.lock();
 		int size = amd->size_callback();
 		for (int i = 0; i < size; i++) {
-			float param = amd->get_param_callback(i).at(mx_x, mx_y);
-			float value = amd->get_value_callback(i);
+			double param = amd->get_param_callback(i).at(mx_x, mx_y);
+			double value = amd->get_value_callback(i);
 			points.push_back({ param , value });
 		}
+		amd->locker.unlock();
+
+		closest_to_pointer_param = -1;
+		double dist = INFINITY;
+		for (int i = 0; i < size; i++) {
+			auto [px, py] = convert_point_to_canvas_coordinates(points[i].first, points[i].second);
+			double loc_dist = std::pow(mouse_x - px, 2) + std::pow(mouse_y - py, 2);
+			if (loc_dist < dist) {
+				dist = loc_dist;
+				closest_to_pointer_param = i;
+			}
+		}
+		if (closest_to_pointer_param > -1) {
+			closest_param_x = points[closest_to_pointer_param].first;
+			closest_param_y = points[closest_to_pointer_param].second;
+		}
+
 		std::sort(points.begin(), points.end());
 
 		UpdateEdges();
 	}
 
-	std::pair<float, float> convert_point_to_canvas_coordinates(float x, float y) const {
+	std::pair<double, double> convert_point_to_canvas_coordinates(double x, double y) const {
 		x -= internal_center_x;
 		y -= internal_center_y;
 
@@ -74,7 +97,7 @@ struct DottedPlotter : HandleableUIPart {
 		return { x,y };
 	}
 
-	std::pair<float, float> convert_point_to_internal_coordinates(float x, float y) const {
+	std::pair<double, double> convert_point_to_internal_coordinates(double x, double y) const {
 		x -= plotter_xpos;
 		y -= plotter_ypos;
 
@@ -92,12 +115,25 @@ struct DottedPlotter : HandleableUIPart {
 	void RealignIndicators() {
 		lock_guard locker(Lock);
 
-		left_top_indicator->SafeStringReplace(std::to_string(internal_center_y + internal_height * 0.5));
-		bottom_right_indicator->SafeStringReplace(std::to_string(internal_center_x + internal_width * 0.5));
+		auto [mcx, mcy] = convert_point_to_internal_coordinates(mouse_x, mouse_y);
+		mouse_cx = mcx;
+		mouse_cy = mcy;
 
-		left_bottom_indicator->SafeStringReplace(std::to_string(internal_center_y - internal_height * 0.5));
-		bottom_left_indicator->SafeStringReplace(std::to_string(internal_center_x - internal_width * 0.5));
-		//todo: fix following lines
+		auto fp_to_string = [](double f) -> std::string {
+			std::stringstream ss;
+			ss << f;
+			return ss.str();
+		};
+
+		left_top_indicator->SafeStringReplace(fp_to_string(internal_center_y + internal_height * 0.5));
+		bottom_right_indicator->SafeStringReplace(fp_to_string(internal_center_x + internal_width * 0.5));
+
+		left_bottom_indicator->SafeStringReplace(fp_to_string(internal_center_y - internal_height * 0.5));
+		bottom_left_indicator->SafeStringReplace(fp_to_string(internal_center_x - internal_width * 0.5));
+
+		indicator_top->SafeStringReplace(fp_to_string(mouse_cx));
+		indicator_right->SafeStringReplace(fp_to_string(mouse_cy));
+
 		left_top_indicator->SafeChangePosition_Argumented(GLOBAL_TOP | GLOBAL_RIGHT,
 			plotter_xpos - (plotter_width * 0.5 + outter_margin), plotter_ypos + plotter_height * 0.5);
 		left_bottom_indicator->SafeChangePosition_Argumented(GLOBAL_BOTTOM | GLOBAL_RIGHT,
@@ -107,30 +143,16 @@ struct DottedPlotter : HandleableUIPart {
 		bottom_left_indicator->SafeChangePosition_Argumented(GLOBAL_TOP | GLOBAL_LEFT,
 			plotter_xpos - plotter_width * 0.5, plotter_ypos - (plotter_height * 0.5 + outter_margin));
 
-		if (is_hovered) {
-			indicator_top->SafeStringReplace(std::to_string(mouse_cx));
-			indicator_right->SafeStringReplace(std::to_string(mouse_cy));
-
-			indicator_top->SafeChangePosition_Argumented(GLOBAL_BOTTOM,
-				mouse_x, plotter_ypos +  (plotter_height * 0.5 + outter_margin));
-			indicator_right->SafeChangePosition_Argumented(GLOBAL_LEFT,
-				plotter_xpos + (plotter_width * 0.5 + outter_margin), mouse_y);
-		}
+		indicator_top->SafeChangePosition_Argumented(GLOBAL_BOTTOM,
+			mouse_x, plotter_ypos + (plotter_height * 0.5 + outter_margin));
+		indicator_right->SafeChangePosition_Argumented(GLOBAL_LEFT,
+			plotter_xpos + (plotter_width * 0.5 + outter_margin), mouse_y);
 	}
 
 	void Draw() override {
 		lock_guard locker(Lock);
 		DumpPoints();
 		RealignIndicators();
-
-		glPointSize(points_size);
-		GLCOLOR(points_color);
-		glBegin(GL_POINTS);
-		for (auto& [x, y] : points) {
-			auto [conv_x, conv_y] = convert_point_to_canvas_coordinates(x, y);
-			glVertex2f(conv_x, conv_y);
-		}
-		glEnd();
 
 		glLineWidth(1);
 		GLCOLOR(bright_lines_color | (is_hovered * 0xFF));
@@ -147,30 +169,50 @@ struct DottedPlotter : HandleableUIPart {
 		bottom_left_indicator->Draw();
 
 		if (is_hovered) {
+			auto [cpx, cpy] = convert_point_to_canvas_coordinates(closest_param_x, closest_param_y);
+
 			glBegin(GL_LINES);
 			GLCOLOR(bright_lines_color);
 			glVertex2f(plotter_xpos + 0.5 * plotter_width, mouse_y);
 			glVertex2f(plotter_xpos - 0.5 * plotter_width, mouse_y);
+
 			glVertex2f(mouse_x, plotter_ypos - 0.5 * plotter_height);
 			glVertex2f(mouse_x, plotter_ypos + 0.5 * plotter_height);
+
+			GLCOLOR(points_color);
+			glVertex2f(mouse_x, mouse_y);
+			glVertex2f(cpx, cpy);
 			glEnd();
 
 			indicator_top->Draw();
 			indicator_right->Draw();
 		}
+
+		glPointSize(points_size);
+		GLCOLOR(points_color);
+		glBegin(GL_POINTS);
+		for (auto& [x, y] : points) {
+			auto [conv_x, conv_y] = convert_point_to_canvas_coordinates(x, y);
+
+			if (std::abs(conv_x - plotter_xpos) > 0.5 * plotter_width || std::abs(conv_y - plotter_ypos) > 0.5 * plotter_height)
+				continue;
+
+			glVertex2f(conv_x, conv_y);
+		}
+		glEnd();
 	}
 	
 	void UpdateEdges() {
 		lock_guard locker(Lock);
 
-		float new_width = internal_width;
-		float new_height = internal_height;
+		double new_width = internal_width;
+		double new_height = internal_height;
 
-		float left_x = internal_center_x - 0.5 * internal_width;
-		float right_x = internal_center_x + 0.5 * internal_width;
+		double left_x = internal_center_x - 0.5 * internal_width;
+		double right_x = internal_center_x + 0.5 * internal_width;
 
-		float min_y = internal_center_y - 0.5 * internal_height;
-		float max_y = internal_center_y + 0.5 * internal_height;
+		double min_y = internal_center_y - 0.5 * internal_height;
+		double max_y = internal_center_y + 0.5 * internal_height;
 
 		if (points.size()) {
 			left_x = points.front().first;
@@ -184,21 +226,43 @@ struct DottedPlotter : HandleableUIPart {
 			new_height = max_y - min_y;
 		}
 
+		if (std::abs(new_width) >= max_value || std::isnan(new_width))
+			new_width = max_value;
+		if (std::abs(new_height) >= max_value || std::isnan(new_height))
+			new_height = max_value;
+
+		if (std::abs(min_y) >= max_value || std::isnan(min_y))
+			min_y = max_value;
+		if (std::abs(max_y) >= max_value || std::isnan(max_y))
+			max_y = max_value;
+		if (std::abs(right_x) >= max_value || std::isnan(right_x))
+			right_x = max_value;
+		if (std::abs(left_x) >= max_value || std::isnan(left_x))
+			left_x = max_value;
+
 		if (is_fixed_aspect_ratio) {
-			float plotter_ratio = plotter_width / plotter_height;
-			float internal_ratio = new_width / new_height;
+			double plotter_ratio = plotter_width / plotter_height;
+			double internal_ratio = new_width / new_height;
 			if (plotter_ratio > internal_ratio)
 				new_width = new_height * plotter_ratio;
 			else
-				new_height = new_width / plotter_ratio;
-			std::cout << plotter_ratio << std::endl;
+				new_height = new_width / plotter_ratio; 
 		}
+		
+		constexpr double weight_coef = 0.5;
+		internal_width = new_width * weight_coef + internal_width * (1 - weight_coef); //slow convergence;
+		internal_height = new_height * weight_coef + internal_height * (1 - weight_coef);
+		double avg_x = (left_x + right_x) * 0.5, avg_y = (min_y + max_y) * 0.5;
+		internal_center_x = internal_center_x * (1 - weight_coef) + avg_x * weight_coef;
+		internal_center_y = internal_center_y * (1 - weight_coef) + avg_y * weight_coef;
 
-		internal_width = (new_width + internal_width) * 0.5; //slow convergence;
-		internal_height = (new_height + internal_height) * 0.5;
-		float avg_x = (left_x + right_x) * 0.5, avg_y = (min_y + max_y) * 0.5;
-		internal_center_x = (internal_center_x + avg_x) * 0.5;
-		internal_center_y = (internal_center_y + avg_y) * 0.5;
+		/*
+		internal_width = new_width; 
+		internal_height = new_height;
+		double avg_x = (left_x + right_x) * 0.5, avg_y = (min_y + max_y) * 0.5;
+		internal_center_x = avg_x;
+		internal_center_y = avg_y;
+		*/
 	}
 
 	void SafeMove(float dx, float dy) override {
@@ -213,7 +277,7 @@ struct DottedPlotter : HandleableUIPart {
 	}
 	void SafeChangePosition_Argumented(BYTE Arg, float NewX, float NewY) override {
 		lock_guard locker(Lock);
-		float CW = 0.5f * (
+		double CW = 0.5f * (
 			(INT32)((BIT)(GLOBAL_LEFT & Arg))
 			- (INT32)((BIT)(GLOBAL_RIGHT & Arg))
 			) * plotter_width,
@@ -235,9 +299,14 @@ struct DottedPlotter : HandleableUIPart {
 			is_hovered = true;
 			mouse_x = mx;
 			mouse_y = my;
-			auto [mcx, mcy] = convert_point_to_internal_coordinates(mouse_x, mouse_y);
-			mouse_cx = mcx;
-			mouse_cy = mcy;
+
+			if (Button && amd && amd->is_alive) {
+				amd->locker.lock();
+				matrix copy = amd->get_param_callback(closest_to_pointer_param);
+				amd->locker.unlock();
+				on_click(copy);
+				return 1;
+			}
 		}
 		else {
 			is_hovered = false;
@@ -247,7 +316,7 @@ struct DottedPlotter : HandleableUIPart {
 	bool IsResizeable() override {
 		return true;
 	}
-	void virtual SafeResize(float NewHeight, float NewWidth) {
+	void virtual SafeResize(double NewHeight, double NewWidth) {
 		plotter_height = NewHeight;
 		plotter_width = NewWidth;
 		return;

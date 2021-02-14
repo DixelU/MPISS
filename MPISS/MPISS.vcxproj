@@ -180,6 +180,7 @@
     <ClInclude Include="dotted_plotter.h" />
     <ClInclude Include="exprtk_wrapper.h" />
     <ClInclude Include="access_method_data.h" />
+    <ClInclude Include="matrix_explorer.h" />
     <ClInclude Include="mpiss_cell.h" />
     <ClInclude Include="mpiss_cemetery.h" />
     <ClInclude Include="MPISS_main.h" />

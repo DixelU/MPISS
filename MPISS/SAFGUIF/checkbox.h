@@ -31,6 +31,8 @@ struct CheckBox : HandleableUIPart {///NeedsTest
 			this->Tip = TipSettings->CreateOne(TipText);
 			this->Tip->SafeChangePosition_Argumented(TipAlign, Xpos - ((TipAlign == _Align::left) ? 0.5f : ((TipAlign == _Align::right) ? -0.5f : 0)) * SideSize, Ypos - SideSize);
 		}
+		else
+			this->Tip = NULL;
 	}
 	void Draw() override {
 		Lock.lock();
@@ -131,7 +133,7 @@ struct CheckBox : HandleableUIPart {///NeedsTest
 		}
 	}
 	inline DWORD TellType() override {
-		return _TellType::checkbox;
+		return TT_CHECKBOX;
 	}
 };
 #endif // !SAFGUIF_CHECKBOX

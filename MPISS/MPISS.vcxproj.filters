@@ -125,5 +125,8 @@
     <ClInclude Include="SAFGUIF\windows_handler.h">
       <Filter>Файлы заголовков\SAFGUIF</Filter>
     </ClInclude>
+    <ClInclude Include="matrix_explorer.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

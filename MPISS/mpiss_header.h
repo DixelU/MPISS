@@ -7,6 +7,7 @@
 //#include "matrix.h"
 
 #include <list>
+#include <cctype>
 #include <iostream>
 #include <vector>
 

@@ -14,6 +14,7 @@ struct SelectablePropertedList : HandleableUIPart {
 	void(*OnSelect)(int ID);
 	void(*OnGetProperties)(int ID);
 	float HeaderCXPos, HeaderYPos, CalculatedHeight, SpaceBetween, Width;
+	float DefaultScrollStep;
 	ButtonSettings* ButtSettings;
 	std::deque<std::string> SelectorsText;
 	std::deque<Button*> Selectors;
@@ -39,6 +40,9 @@ struct SelectablePropertedList : HandleableUIPart {
 		this->HeaderYPos = HeaderYPos;
 		this->CurrentTopLineID = 0;
 		this->TextInButtonsAlign = TextInButtonsAlign;
+		this->DefaultScrollStep = 3;
+		this->TopArrowHovered = false;
+		this->BottomArrowHovered = false;
 		//SelectedID = 0xFFFFFFFF;
 	}
 	void RecalculateCurrentHeight() {
@@ -52,12 +56,12 @@ struct SelectablePropertedList : HandleableUIPart {
 		if (fabsf(mx - HeaderCXPos) < 0.5 * Width && my < HeaderYPos && my > HeaderYPos - CalculatedHeight) {
 			if (Button == 2 /*UP*/) {
 				if (State == -1) {
-					SafeRotateList(-3);
+					SafeRotateList(-DefaultScrollStep);
 				}
 			}
 			else if (Button == 3 /*DOWN*/) {
 				if (State == -1) {
-					SafeRotateList(3);
+					SafeRotateList(DefaultScrollStep);
 				}
 			}
 		}

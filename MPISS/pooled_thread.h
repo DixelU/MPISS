@@ -10,7 +10,7 @@
 class pooled_thread {
 public:
 	enum class state {
-		running, idle, waiting
+		idle, running, waiting
 	};
 private:
 	using funcT = std::function<void(void**)>;
@@ -37,10 +37,9 @@ private:
 		th.detach();
 	}
 public:
-	pooled_thread(funcT function = [](void** ptr) {return; }, int awaiting_time = 5) :exec_func(function), await_in_milliseconds(awaiting_time), default_state(state::idle) {
+	pooled_thread(funcT function = [](void** ptr) {return; }, int awaiting_time = 5) :default_state(state::idle), exec_func(function), await_in_milliseconds(awaiting_time) {
 		thread_data = nullptr;
 		is_active = true;
-		default_state = state::idle;
 		start_thread();
 	}
 	~pooled_thread() {
