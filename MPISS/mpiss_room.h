@@ -7,6 +7,7 @@
 
 namespace mpiss {
 
+
 	struct room {
 		double* contact_probability;
 		point<state_enum_size>* state_spread_modifier;

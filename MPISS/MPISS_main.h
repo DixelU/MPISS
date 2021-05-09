@@ -34,6 +34,7 @@ enum class minimization_method {
 	differential_evolution, 
 	extended_annealing,
 	gradient,
+	newton
 };
 
 #define NO_MULTISET
@@ -425,7 +426,6 @@ struct town_builder {
 	}
 };
 
-
 struct town_manipulator {
 	town_builder t_builder;
 	std::vector<pooled_thread*> threads;
@@ -439,9 +439,13 @@ struct town_manipulator {
 	std::vector<std::pair<point<mpiss::state_enum_size>, point<mpiss::state_enum_size>>>
 		start_simulation_with_current_parameters(const size_t repeats, const size_t iters, const size_t initial_amount_of_hns) {
 
+		static std::mutex st_mutex;
+		std::lock_guard<std::mutex> guard(st_mutex);
+
 		size_t amount_of_threads = std::max(1, int32_t(std::thread::hardware_concurrency()) - 1);
 		while (threads.size() < amount_of_threads)
 			threads.push_back(new pooled_thread());
+		
 
 		double_t repeats_per_thread = double_t(repeats) / amount_of_threads;
 		size_t repeats_per_thread_rounded_up = size_t(std::ceil(repeats_per_thread));
@@ -611,14 +615,13 @@ matrix find_closest_sample(
 
 	switch (method) {
 	case minimization_method::gradient:
-		return params_manipulator::simple_gradient_meth(func, first_approx, false, epsilon_norma_comparator, 1e-8, amd);
-		break;
+		return params_manipulator::simple_gradient_meth(func, first_approx, false, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
 	case minimization_method::differential_evolution:
-		return params_manipulator::differential_evolution(func, first_approx, 0.35, 0.15, 200, 0.0001, amd);
-		break;
+		return params_manipulator::differential_evolution(func, first_approx, 0.35, 0.15, 200, params_manipulator_globals::desired_range, amd);
 	case minimization_method::extended_annealing:
-		return params_manipulator::extended_annealing(func, first_approx, 0.35, 0.995, 200, 0.0001, amd);
-		break;
+		return params_manipulator::extended_annealing(func, first_approx, 0.35, 0.995, 200, sample_size, params_manipulator_globals::desired_range, amd);
+	case minimization_method::newton:
+		return params_manipulator::newton_method(func, first_approx, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
 	}
 	return
 		first_approx;
@@ -658,11 +661,14 @@ std::map<mpiss::disease_state, std::vector<double>> get_sample(const std::wstrin
 matrix SimpleExample(access_method_data* amd, minimization_method method) {
 	int counter = 0;
 	auto func = [&](const matrix& v)->double {
-		auto innerfunc = [](double& v, size_t x, size_t y)->void {v = v - 0.075 * x - 0.0945454 * y; };
+		auto innerfunc = [](double& v, size_t y, size_t x)->void {
+			v = v - (y + 1); 
+			if (!y)
+				v *= 4;
+		};
 		auto mat = v;
-		mat.at(0, 0) *= 16;
 		mat.selfapply_indexed(innerfunc);
-		auto val = mat.norma(0.45) + mpiss::erand()*0.5;
+		auto val = mat.norma(2.);
 		counter++;
 		return val;
 	};
@@ -670,23 +676,34 @@ matrix SimpleExample(access_method_data* amd, minimization_method method) {
 		return norma < eps;
 	};
 	matrix begin = {
-		{0.1,0.23,0.17,0.24,0.51},
-		{0.1,0.23,0.17,0.24,0.51},
-		{0.1,0.23,0.17,0.24,0.51},
-		{0.1,0.23,0.17,0.24,0.51},
-		{0.1,0.23,0.17,0.24,0.51},
-		{0.1,0.23,0.17,0.24,0.51}
+		{0.5},
+		{0.5},	
+		{0.5},
+		/* {0.1},
+		{0.35},
+		{0.1458},
+		{0.1},
+		{0.2},
+		{0.17},
+		{0.1},
+		{0.35},
+		{0.1458},
+		{0.1},
+		{0.2},
+		{0.17},
+		{0.1},
+		{0.35},
+		{0.1458},	*/
 	};
 	switch (method) {
 	case minimization_method::gradient:
-		return params_manipulator::simple_gradient_meth(func, begin, false, epsilon_norma_comparator, 1e-8, amd);
-		break;
+		return params_manipulator::simple_gradient_meth(func, begin, false, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
 	case minimization_method::differential_evolution:
-		return params_manipulator::differential_evolution(func, begin, 0.35, 0.15, 200, 1e-8, amd);
-		break;
+		return params_manipulator::differential_evolution(func, begin, 0.35, 0.15, 200, params_manipulator_globals::desired_range, amd);
 	case minimization_method::extended_annealing:
-		return params_manipulator::extended_annealing(func, begin, 0.35, 0.995, 200, 1e-8, amd);
-		break;
+		return params_manipulator::extended_annealing(func, begin, 0.35, 0.999, 100, 200, params_manipulator_globals::desired_range, amd);
+	case minimization_method::newton:
+		return params_manipulator::newton_method(func, begin, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
 	}
 	return begin;
 }

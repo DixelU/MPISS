@@ -42,7 +42,7 @@ struct DottedPlotter : HandleableUIPart {
 		plotter_xpos(xpos), plotter_ypos(ypos), plotter_width(width), plotter_height(height),
 		points_color(points_color), lines_color(lines_color), bright_lines_color(bright_lines_color),
 		points_size(points_size), internal_width(1), internal_height(1), internal_center_x(1), internal_center_y(1),
-		mouse_x(0), mouse_y(0), is_hovered(false), is_fixed_aspect_ratio(is_fixed_aspect_ratio), grid_rel_depth(3),
+		mouse_x(0), mouse_y(0), is_hovered(false), is_fixed_aspect_ratio(is_fixed_aspect_ratio), grid_rel_depth(8),
 		outter_margin(outter_margin), mx_x(0), mx_y(0), closest_to_pointer_param(-1), closest_param_x(NAN), closest_param_y(NAN)
 	{
 		amd = new access_method_data;
@@ -149,6 +149,10 @@ struct DottedPlotter : HandleableUIPart {
 			plotter_xpos + (plotter_width * 0.5 + outter_margin), mouse_y);
 	}
 
+	inline static double nearest_power_of(double x, double v) {
+		return std::pow(v, std::ceil(std::log(x) / std::log(v)));
+	}
+
 	void Draw() override {
 		lock_guard locker(Lock);
 		DumpPoints();
@@ -167,6 +171,34 @@ struct DottedPlotter : HandleableUIPart {
 		left_bottom_indicator->Draw();
 		bottom_right_indicator->Draw();
 		bottom_left_indicator->Draw();
+
+		int rel_depth_sq = (grid_rel_depth * grid_rel_depth);
+		
+		double rounded_width = nearest_power_of(internal_width, 2.) / grid_rel_depth;
+		double rounded_height = nearest_power_of(internal_height, 2.) / grid_rel_depth;
+		double i_x_lb = std::floor((internal_center_x - 0.5 * internal_width) / rounded_width) * rounded_width;
+		double i_y_lb = std::floor((internal_center_y - 0.5 * internal_height) / rounded_height) * rounded_height;
+
+		glBegin(GL_LINES);
+		GLCOLOR(((lines_color & 0xFFFFFF00) | ((lines_color & 0xFF) >> 1)));
+		for (int i = 0; i < grid_rel_depth*2; i++) {
+
+			double x1 = i * rounded_width + i_x_lb;
+			double y1 = i * rounded_height + i_y_lb;
+
+			auto [x1c, y1c] = convert_point_to_canvas_coordinates(x1, y1);
+
+			if (std::abs(x1c - plotter_xpos) < plotter_width * 0.5) {
+				glVertex2d(x1c, plotter_ypos + 0.5 * plotter_height);
+				glVertex2d(x1c, plotter_ypos - 0.5 * plotter_height);
+			}
+			if (std::abs(y1c - plotter_ypos) < plotter_height * 0.5) {
+				glVertex2d(plotter_xpos + 0.5 * plotter_width, y1c);
+				glVertex2d(plotter_xpos - 0.5 * plotter_width, y1c);
+			}
+		}
+		glEnd();
+
 
 		if (is_hovered) {
 			auto [cpx, cpy] = convert_point_to_canvas_coordinates(closest_param_x, closest_param_y);

@@ -116,6 +116,11 @@ void Init() {
 	(*T)["REPS"] = new InputField(data::REPS, -325, 170 - WindowHeapSize, 10, 40, System_White, &data::REPS, 0x007FFFFF, System_White, "Repeats", 7, _Align::center, _Align::center, InputField::Type::NaturalNumbers);
 	(*T)["INITIALS"] = new InputField(data::INITIALS, -225, 170 - WindowHeapSize, 10, 40, System_White, &data::INITIALS, 0x007FFFFF, System_White, "Inititals", 7, _Align::center, _Align::center, InputField::Type::NaturalNumbers);
 
+
+	(*T)["1"] = new InputField("0", -275, 170 - WindowHeapSize, 10, 40, System_White, NULL, 0x007FFFFF, System_White, "___", 7, _Align::center, _Align::center, InputField::Type::NaturalNumbers);
+	(*T)["2"] = new InputField("0", -225, 190 - WindowHeapSize, 10, 40, System_White, NULL, 0x007FFFFF, System_White, "___", 7, _Align::center, _Align::center, InputField::Type::NaturalNumbers);
+
+
 	(*T)["MATRIX_EXPLORER"] = new MatrixExplorer(-345, 140 - WindowHeapSize, 5, 1, 0x00007F7F, 0xFFFFFFFF, 0x1F1F1FFF,
 		[DP]()->std::pair<size_t, size_t> {
 			if (DP->amd->is_alive) {
@@ -160,6 +165,7 @@ void Init() {
 	WH->EnableWindow("SETTINGS");
 	WH->EnableWindow("PRINT_DEST");
 
+	params_manipulator_globals::desired_range = 1e-8;
 
 	//__main();
 }

@@ -8,22 +8,71 @@
 #include "mpiss_header.h"
 #include "access_method_data.h"
 
+namespace params_manipulator_globals {
+	static double desired_range;
+};
+
 struct params_manipulator {
+
 	inline static matrix gradient(std::function<double(const matrix&)> f, const matrix& p) {
 		constexpr double step = 0.000001;
 		matrix e(p.rows(), p.cols()), D(p.rows(), p.cols());
-		auto h = p * step;
-		h.selfapply([step](double& v) {if (v < DBL_EPSILON) v = step; });
-		for (size_t i = 0; i < e.rows(); i++) {
-			e.at(0, i) = h.at(0, i);
-			auto pph = p + e, pmh = p - e;
-			pph.selfapply([](double& v) { v = std::clamp(v, 0., 1.); });
-			pmh.selfapply([](double& v) { v = std::clamp(v, 0., 1.); });
-			D.at(0, i) = (f(pph) - f(pmh)) / (pph.at(0, i) - pmh.at(0, i));
-			e.at(0, i) = 0;
+		auto h = p * (step / p.norma());
+		h.selfapply([step](double& v) {if (v < DBL_EPSILON || isnan(v)) v = step; });
+		for (size_t x = 0; x < p.cols(); x++) {
+			for (size_t y = 0; y < p.rows(); y++) {
+				e.at(x, y) = h.at(x, y);
+				auto pph = p + e, pmh = p - e;
+				D.at(x, y) = (f(pph) - f(pmh)) / (pph.at(x, y) - pmh.at(x, y));
+				e.at(x, y) = 0;
+			}
 		}
 		return D;
 	}
+
+	inline static std::tuple<double, matrix, matrix> func_gradient_and_hessian(std::function<double(const matrix&)> f, matrix p) {
+		constexpr double step = 0.000001;
+		if (p.rows() != 1 && p.cols() != 1)
+			throw std::runtime_error("matrix arguments are not supported!");
+		if (p.cols() > 1)
+			p = p.transpose();
+		const size_t size = p.rows();
+		matrix e(size, 1), D(size, 1), D2(size, size);
+		matrix fppmh(size, 2);
+		double fp = f(p);
+		auto h = p * (step / p.norma());
+		h.selfapply([step](double& v) {if (v < step || isnan(v)) v = step; });
+
+		for (size_t i = 0; i < size; i++) {
+			e.at(0, i) = h.at(0, i);
+			auto pph = p + e, pmh = p - e;
+			e.at(0, i) = 0;
+			fppmh.at(0, i) = f(pmh);
+			fppmh.at(1, i) = f(pph);
+		}
+
+		for (size_t i = 0; i < size; i++) {
+			D.at(0, i) = 0.5 * (fppmh.at(1, i) - fppmh.at(0, i)) / h.at(0, i);
+			D2.at(i, i) = (fppmh.at(1, i) + fppmh.at(0, i) - 2. * fp) / std::pow(h.at(0, i), 2.);
+		}
+
+		for (size_t y = 0; y < size; y++) {
+			for (size_t x = 0; x < y; x++) {
+				double h1, h2;
+				e.at(0, x) = (h1 = h.at(0, x));
+				e.at(0, y) = (h2 = h.at(0, y));
+				auto pph = p + e, pmh = p - e;
+				e.at(0, x) = 0;
+				e.at(0, y) = 0;
+				double fpph = f(pph);
+				double fpmh = f(pmh);
+				D2.at(x, y) = (fpph + fpmh + 2. * fp - (fppmh.at(0, x) + fppmh.at(0, y) + fppmh.at(1, x) + fppmh.at(1, y))) / (h.at(0, x) * h.at(0, y) * 2.);
+				D2.at(y, x) = D2.at(x, y);
+			}
+		}
+		return { fp, D, D2 };
+	}
+
 	inline static std::pair<double, double> find_edge_multipliers(matrix D, const matrix& pt) {
 		double top = 1e12, bottom = -1e12;
 		for (int i = 0; i < D.rows(); i++) {
@@ -100,13 +149,13 @@ struct params_manipulator {
 		matrix begin,
 		bool attempt_global_minimization,
 		std::function<bool(double, double)> norma_comparator = [](double eps, double norma)->bool {return norma < eps; },
-		double epsilon = 1e-10, 
+		double epsilon = 1e-10,
 		access_method_data* amd = nullptr
 	) {
 		static std::deque<std::pair<matrix, double>> buffer;
 		buffer.clear();
-		static matrix prev;
-		static double func_value;
+		matrix prev;
+		double func_value;
 
 		buffer.clear();
 
@@ -148,7 +197,7 @@ struct params_manipulator {
 
 			if (amd) {
 				amd->locker.lock();
-				if (buffer.size() == 200)
+				if (buffer.size() == 6)
 					buffer.pop_front();
 				buffer.push_back({ begin, func_minima });
 				amd->locker.unlock();
@@ -161,6 +210,48 @@ struct params_manipulator {
 			//if ((prev - begin).norma(1) < epsilon)
 				//break;
 			//std::cout << "Next approx: " << begin.transpose();
+		} while (true);
+		return begin;
+	}
+
+	inline static matrix newton_method(
+		std::function<double(const matrix&)> func,
+		matrix begin,
+		std::function<bool(double, double)> norma_comparator = [](double eps, double norma)->bool {return norma < eps; },
+		double epsilon = 1e-10,
+		access_method_data* amd = nullptr
+	) {
+		static std::deque<std::pair<matrix, double>> buffer;
+		buffer.clear();
+		matrix prev;
+		double func_value;
+
+		buffer.clear();
+
+		if (amd) {
+			amd->size_callback = []()->int { return buffer.size(); };
+			amd->get_value_callback = [](int i)->double { return buffer[i].second; };
+			amd->get_param_callback = [](int i)->matrix& { return buffer[i].first; };
+			amd->is_alive = true;
+		}
+
+		do {
+			auto [f, D, H] = func_gradient_and_hessian(func, begin);
+
+			prev = begin;
+			begin = begin - H.inverse() * D;
+
+			if (amd) {
+				amd->locker.lock();
+				if (buffer.size() == 6)
+					buffer.pop_front();
+				buffer.push_back({ begin, f });
+				amd->locker.unlock();
+			}
+
+			if (norma_comparator(epsilon, (begin - prev).norma()))
+				break;
+
 		} while (true);
 		return begin;
 	}
@@ -225,7 +316,7 @@ struct params_manipulator {
 				if (new_value < func_values[i]) {
 					if (amd)
 						amd->locker.lock();
-					entries[i] = new_approx;
+					entries[i].swap(new_approx);
 					func_values[i] = new_value;
 					if (amd)
 						amd->locker.unlock();
@@ -241,8 +332,8 @@ struct params_manipulator {
 					max = new_value;
 				}
 			}
-			printf("Range: %lf\n", max - min);
-			printf("New minima: %lf\n", min);
+			//printf("Range: %lf\n", max - min);
+			//printf("New minima: %lf\n", min);
 			//std::cout << std::endl << entries[min_id] << std::endl;
 		} while (max - min > epsilon);
 		std::cout << std::endl << entries[min_id] << std::endl;
@@ -254,6 +345,7 @@ struct params_manipulator {
 		matrix sample,
 		double initial_sample_wiggling,
 		double wiggle_decay_coef,
+		double start_temperature,
 		size_t entries_amount,
 		double epsilon = 1e-10,
 		access_method_data* amd = nullptr
@@ -268,35 +360,39 @@ struct params_manipulator {
 
 		if (amd) {
 			amd->size_callback = []()->int { return entries.size(); };
-			amd->get_value_callback = [](int i)->double {return func_values[i]; };
-			amd->get_param_callback = [](int i)->matrix& {return entries[i]; };
+			amd->get_value_callback = [](int i)->double { return func_values[i]; };
+			amd->get_param_callback = [](int i)->matrix& { return entries[i]; };
 			amd->is_alive = true;
 		}
 
 		matrix wiggle_mx = sample;
 
 		while (cur_wiggle_coef > epsilon) {
-			auto min = std::min_element(func_values.begin(), func_values.end());
-
-			printf("Current minima: %lf\n", *min);
-			printf("Current wiggle coef: %lf\n", cur_wiggle_coef);
-			std::cout << std::endl << entries[min - func_values.begin()] << std::endl;
 
 			for (size_t i = 0; i < entries_amount; i++) {
 				wiggle_mx.selfapply([&](double& v) {
 					v = mpiss::erand() - 0.5;
-				});
+					});
 				wiggle_mx.normalize();
 				auto new_approx = entries[i] + wiggle_mx * cur_wiggle_coef;
+				new_approx.selfapply([](double& v) {
+					v = std::clamp(v, 0., 1.);
+					});
 				double func_val = func(new_approx);
-				double prob = std::exp(-(func_val - func_values[i]) / cur_wiggle_coef);
-				bool random_jump = mpiss::erand() < prob;
-				if (func_val < func_values[i] || random_jump) {
+				bool random_jump = false;
+				double prob = 0;
+				bool is_smaller = func_val < func_values[i];
+				if (!is_smaller) {
+					prob = std::exp(-(func_val - func_values[i]) / (cur_wiggle_coef * start_temperature));
+					random_jump = mpiss::erand() <= prob;
+				}
+				if (is_smaller || random_jump) {
 					amd->locker.lock();
 					func_values[i] = func_val;
-					wiggle_mx.swap(entries[i]);
+					new_approx.swap(entries[i]);
 					amd->locker.unlock();
 				}
+				std::cout << func_val << " " << func_values[i] << " " << cur_wiggle_coef * start_temperature << " " << prob << " " << random_jump << std::endl;
 			}
 			cur_wiggle_coef *= wiggle_decay_coef;
 		}
