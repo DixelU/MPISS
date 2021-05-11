@@ -76,6 +76,10 @@ struct DottedPlotter : HandleableUIPart {
 			closest_param_x = points[closest_to_pointer_param].first;
 			closest_param_y = points[closest_to_pointer_param].second;
 		}
+		else {
+			closest_param_x = internal_center_x;
+			closest_param_y = internal_center_y;
+		}
 
 		std::sort(points.begin(), points.end());
 
@@ -188,11 +192,11 @@ struct DottedPlotter : HandleableUIPart {
 
 			auto [x1c, y1c] = convert_point_to_canvas_coordinates(x1, y1);
 
-			if (std::abs(x1c - plotter_xpos) < plotter_width * 0.5) {
+			if (std::abs(x1c - plotter_xpos) <= plotter_width * 0.5 + 0.01) {
 				glVertex2d(x1c, plotter_ypos + 0.5 * plotter_height);
 				glVertex2d(x1c, plotter_ypos - 0.5 * plotter_height);
 			}
-			if (std::abs(y1c - plotter_ypos) < plotter_height * 0.5) {
+			if (std::abs(y1c - plotter_ypos) <= plotter_height * 0.5 + 0.01) {
 				glVertex2d(plotter_xpos + 0.5 * plotter_width, y1c);
 				glVertex2d(plotter_xpos - 0.5 * plotter_width, y1c);
 			}
@@ -332,11 +336,19 @@ struct DottedPlotter : HandleableUIPart {
 			mouse_x = mx;
 			mouse_y = my;
 
-			if (Button && amd && amd->is_alive) {
+			if (Button == -1 && amd && amd->is_alive) {
 				amd->locker.lock();
 				matrix copy = amd->get_param_callback(closest_to_pointer_param);
 				amd->locker.unlock();
 				on_click(copy);
+				return 1;
+			}
+			else if (Button == 1 && State<0 && amd && amd->is_alive) {
+				amd->locker.lock();
+				if (closest_to_pointer_param < amd->size_callback()) {
+					amd->delete_callback(closest_to_pointer_param);
+				}
+				amd->locker.unlock();
 				return 1;
 			}
 		}

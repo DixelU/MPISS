@@ -14,6 +14,7 @@ struct access_method_data {
 	std::function<matrix& (int)> get_param_callback;
 	std::function<double(int)> get_value_callback;
 	std::function<int()> size_callback;
+	std::function<void(int)> delete_callback;
 };
 
 #endif 

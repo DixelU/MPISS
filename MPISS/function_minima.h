@@ -9,13 +9,14 @@
 #include "access_method_data.h"
 
 namespace params_manipulator_globals {
-	static double desired_range;
+	double desired_range = 1e-8;
+	int begin_evolution_sizes = 200;
 };
 
 struct params_manipulator {
 
 	inline static matrix gradient(std::function<double(const matrix&)> f, const matrix& p) {
-		constexpr double step = 0.000001;
+		constexpr double step = 1e-5;
 		matrix e(p.rows(), p.cols()), D(p.rows(), p.cols());
 		auto h = p * (step / p.norma());
 		h.selfapply([step](double& v) {if (v < DBL_EPSILON || isnan(v)) v = step; });
@@ -31,7 +32,7 @@ struct params_manipulator {
 	}
 
 	inline static std::tuple<double, matrix, matrix> func_gradient_and_hessian(std::function<double(const matrix&)> f, matrix p) {
-		constexpr double step = 0.000001;
+		constexpr double step = 1e-5;
 		if (p.rows() != 1 && p.cols() != 1)
 			throw std::runtime_error("matrix arguments are not supported!");
 		if (p.cols() > 1)
@@ -160,10 +161,13 @@ struct params_manipulator {
 		buffer.clear();
 
 		if (amd) {
+			amd->locker.lock();
 			amd->size_callback = []()->int { return buffer.size(); };
 			amd->get_value_callback = [](int i)->double {return buffer[i].second; };
 			amd->get_param_callback = [](int i)->matrix& {return buffer[i].first; };
+			amd->delete_callback = [](int i) { buffer.erase(buffer.begin() + i); };
 			amd->is_alive = true;
+			amd->locker.unlock();
 		}
 
 		do {
@@ -197,8 +201,15 @@ struct params_manipulator {
 
 			if (amd) {
 				amd->locker.lock();
-				if (buffer.size() == 6)
-					buffer.pop_front();
+				constexpr size_t maximum = 200;
+				if (buffer.size() == maximum) {
+					size_t max_idx = 0;
+					for (size_t i = 0; i < maximum; i++) {
+						if (buffer[max_idx].second < buffer[i].second)
+							max_idx = i;
+					}
+					buffer.erase(buffer.begin() + max_idx);
+				}
 				buffer.push_back({ begin, func_minima });
 				amd->locker.unlock();
 			}
@@ -229,29 +240,49 @@ struct params_manipulator {
 		buffer.clear();
 
 		if (amd) {
+			amd->locker.lock();
 			amd->size_callback = []()->int { return buffer.size(); };
 			amd->get_value_callback = [](int i)->double { return buffer[i].second; };
 			amd->get_param_callback = [](int i)->matrix& { return buffer[i].first; };
+			amd->delete_callback = [](int i) { buffer.erase(buffer.begin() + i); };
 			amd->is_alive = true;
+			amd->locker.unlock();
 		}
 
 		do {
 			auto [f, D, H] = func_gradient_and_hessian(func, begin);
 
 			prev = begin;
-			begin = begin - H.inverse() * D;
+			if (H.norma() < 0.0001)
+				H = matrix::E_matrix(H.cols());
+
+			auto inverseH = H.inverse();
+			auto direction = -1. * inverseH * D;
+			auto [is_not_degenerated, new_direction, _1, _2] = align_gradient(direction, begin, epsilon);
+			if (!is_not_degenerated)
+				break;
+
+			begin = begin + new_direction.value();
 
 			if (amd) {
 				amd->locker.lock();
-				if (buffer.size() == 6)
-					buffer.pop_front();
+				constexpr size_t maximum = 200;
+				if (buffer.size() == maximum) {
+					size_t max_idx = 0;
+					for (size_t i = 0; i < maximum; i++) {
+						if (buffer[max_idx].second < buffer[i].second)
+							max_idx = i;
+					}
+					buffer.erase(buffer.begin() + max_idx);
+				}
 				buffer.push_back({ begin, f });
 				amd->locker.unlock();
 			}
 
+			std::cout << f << std::endl;
+
 			if (norma_comparator(epsilon, (begin - prev).norma()))
 				break;
-
 		} while (true);
 		return begin;
 	}
@@ -273,10 +304,13 @@ struct params_manipulator {
 		func_values.resize(entries_amount, 1e127);
 
 		if (amd) {
+			amd->locker.lock();
 			amd->size_callback = []()->int { return entries.size(); };
 			amd->get_value_callback = [](int i)->double {return func_values[i]; };
 			amd->get_param_callback = [](int i)->matrix& {return entries[i]; };
+			amd->delete_callback = [](int i) { entries.erase(entries.begin() + i); func_values.erase(func_values.begin() + i); };
 			amd->is_alive = true;
+			amd->locker.unlock();
 		}
 
 		auto mutate = [&](size_t mx_id) -> matrix {
@@ -310,7 +344,7 @@ struct params_manipulator {
 		do {
 			min = 1e127, max = -1e127;
 			min_id = 0, max_id = 0;
-			for (size_t i = 0; i < entries_amount; i++) {
+			for (size_t i = 0; i < amd->size_callback(); i++) {
 				auto new_approx = mutate(i);
 				auto new_value = func(new_approx);
 				if (new_value < func_values[i]) {
@@ -359,17 +393,20 @@ struct params_manipulator {
 		func_values.resize(entries_amount, INFINITY);
 
 		if (amd) {
+			amd->locker.lock();
 			amd->size_callback = []()->int { return entries.size(); };
 			amd->get_value_callback = [](int i)->double { return func_values[i]; };
 			amd->get_param_callback = [](int i)->matrix& { return entries[i]; };
+			amd->delete_callback = [](int i) { entries.erase(entries.begin() + i); func_values.erase(func_values.begin() + i); };
 			amd->is_alive = true;
+			amd->locker.unlock();
 		}
 
 		matrix wiggle_mx = sample;
 
 		while (cur_wiggle_coef > epsilon) {
 
-			for (size_t i = 0; i < entries_amount; i++) {
+			for (size_t i = 0; i < amd->size_callback(); i++) {
 				wiggle_mx.selfapply([&](double& v) {
 					v = mpiss::erand() - 0.5;
 					});
@@ -382,19 +419,19 @@ struct params_manipulator {
 				bool random_jump = false;
 				double prob = 0;
 				bool is_smaller = func_val < func_values[i];
-				if (!is_smaller) {
-					prob = std::exp(-(func_val - func_values[i]) / (cur_wiggle_coef * start_temperature));
-					random_jump = mpiss::erand() <= prob;
-				}
-				if (is_smaller || random_jump) {
+				if (!is_smaller) 
+					prob = std::exp(-(func_val - func_values[i]) / (cur_wiggle_coef / start_temperature));
+				if (is_smaller || mpiss::erand() < prob) { // pure evolution algorithm (couldn't make annealing work)
 					amd->locker.lock();
 					func_values[i] = func_val;
 					new_approx.swap(entries[i]);
 					amd->locker.unlock();
 				}
-				std::cout << func_val << " " << func_values[i] << " " << cur_wiggle_coef * start_temperature << " " << prob << " " << random_jump << std::endl;
+				//std::cout << func_val << " " << func_values[i] << " " << cur_wiggle_coef * start_temperature << " " << prob << " " << random_jump << std::endl;
 			}
+			
 			cur_wiggle_coef *= wiggle_decay_coef;
+			printf("Wiggle coeficient: %f\n", (float)cur_wiggle_coef);
 		}
 		auto min = std::min_element(func_values.begin(), func_values.end());
 

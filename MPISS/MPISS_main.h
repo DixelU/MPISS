@@ -617,9 +617,9 @@ matrix find_closest_sample(
 	case minimization_method::gradient:
 		return params_manipulator::simple_gradient_meth(func, first_approx, false, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
 	case minimization_method::differential_evolution:
-		return params_manipulator::differential_evolution(func, first_approx, 0.35, 0.15, 200, params_manipulator_globals::desired_range, amd);
+		return params_manipulator::differential_evolution(func, first_approx, 0.35, 0.15, params_manipulator_globals::begin_evolution_sizes, params_manipulator_globals::desired_range, amd);
 	case minimization_method::extended_annealing:
-		return params_manipulator::extended_annealing(func, first_approx, 0.35, 0.995, 200, sample_size, params_manipulator_globals::desired_range, amd);
+		return params_manipulator::extended_annealing(func, first_approx, 0.35, 0.999, 1000, params_manipulator_globals::begin_evolution_sizes, params_manipulator_globals::desired_range, amd);
 	case minimization_method::newton:
 		return params_manipulator::newton_method(func, first_approx, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
 	}
@@ -662,13 +662,13 @@ matrix SimpleExample(access_method_data* amd, minimization_method method) {
 	int counter = 0;
 	auto func = [&](const matrix& v)->double {
 		auto innerfunc = [](double& v, size_t y, size_t x)->void {
-			v = v - (y + 1); 
+			v = (v - (y + 1)/80.);
 			if (!y)
 				v *= 4;
 		};
 		auto mat = v;
 		mat.selfapply_indexed(innerfunc);
-		auto val = mat.norma(2.);
+		auto val = std::pow(std::sin(mat.norma(0.45) / 80.),2.) + mat.norma(1)*0.001;
 		counter++;
 		return val;
 	};
@@ -677,9 +677,27 @@ matrix SimpleExample(access_method_data* amd, minimization_method method) {
 	};
 	matrix begin = {
 		{0.5},
-		{0.5},	
 		{0.5},
-		/* {0.1},
+		{0.5},
+		{0.1},
+		{0.35},
+		{0.1458},
+		{0.1},
+		{0.2},
+		{0.17},
+		{0.1},
+		{0.35},
+		{0.1458},
+		{0.1},
+		{0.2},
+		{0.17},
+		{0.1},
+		{0.35},
+		{0.1458},
+		{0.5},
+		{0.5},
+		{0.5},
+		{0.1},
 		{0.35},
 		{0.1458},
 		{0.1},
@@ -693,15 +711,17 @@ matrix SimpleExample(access_method_data* amd, minimization_method method) {
 		{0.17},
 		{0.1},
 		{0.35},
-		{0.1458},	*/
+		{0.1458},
+		{0.35},
+		{0.1458},
 	};
 	switch (method) {
 	case minimization_method::gradient:
 		return params_manipulator::simple_gradient_meth(func, begin, false, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
 	case minimization_method::differential_evolution:
-		return params_manipulator::differential_evolution(func, begin, 0.35, 0.15, 200, params_manipulator_globals::desired_range, amd);
+		return params_manipulator::differential_evolution(func, begin, 0.35, 0.15, params_manipulator_globals::begin_evolution_sizes, params_manipulator_globals::desired_range, amd);
 	case minimization_method::extended_annealing:
-		return params_manipulator::extended_annealing(func, begin, 0.35, 0.999, 100, 200, params_manipulator_globals::desired_range, amd);
+		return params_manipulator::extended_annealing(func, begin, 0.35, 0.999, 10, params_manipulator_globals::begin_evolution_sizes, params_manipulator_globals::desired_range, amd);
 	case minimization_method::newton:
 		return params_manipulator::newton_method(func, begin, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
 	}

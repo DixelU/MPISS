@@ -21,7 +21,7 @@
 #include "MPISS_main.h"
 
 namespace data {
-	std::string ITERS = "1000", REPS = "10", INITIALS = "1";
+	std::string ITERS = "1000", REPS = "10", INITIALS = "1", BES = std::to_string(params_manipulator_globals::begin_evolution_sizes);
 	static pooled_thread th;
 }
 
@@ -34,6 +34,8 @@ void Start() {
 		auto REPS = (InputField*)(*SettingsWindow)["REPS"];
 		auto INITIALS = (InputField*)(*SettingsWindow)["INITIALS"];
 		auto METHOD = (SelectablePropertedList*)(*SettingsWindow)["METHOD"];
+
+		params_manipulator_globals::begin_evolution_sizes = std::stoi(data::BES);
 		
 		auto method = magic_enum::enum_cast<minimization_method>(METHOD->SelectorsText[METHOD->CurrentTopLineID]);
 		if (method) {
@@ -63,6 +65,9 @@ void StartFastExample() {
 		auto DP = (DottedPlotter*)(*MainWindow)["PLOTTER"];
 		auto METHOD = (SelectablePropertedList*)(*SettingsWindow)["METHOD"];
 		auto method = magic_enum::enum_cast<minimization_method>(METHOD->SelectorsText[METHOD->CurrentTopLineID]);
+
+		params_manipulator_globals::begin_evolution_sizes = std::stoi(data::BES);
+
 		if (method) {
 			SimpleExample(DP->amd, method.value());
 			WH->ThrowAlert("Simulation has ended.\n", "Stop signal", SpecialSigns::DrawExTriangle, false, 0x0F0F0FFF, 0xFFFFFFFF);
@@ -70,6 +75,7 @@ void StartFastExample() {
 		else 
 			WH->ThrowAlert("Error while parsing selected minimization method", "Stop signal", SpecialSigns::DrawExTriangle, false, 0x0F0F0FFF, 0xFFFFFFFF);
 	};
+
 	if (data::th.get_state() == pooled_thread::state::idle) {
 		data::th.set_new_function(func);
 		data::th.sign_awaiting();
@@ -117,7 +123,7 @@ void Init() {
 	(*T)["INITIALS"] = new InputField(data::INITIALS, -225, 170 - WindowHeapSize, 10, 40, System_White, &data::INITIALS, 0x007FFFFF, System_White, "Inititals", 7, _Align::center, _Align::center, InputField::Type::NaturalNumbers);
 
 
-	(*T)["1"] = new InputField("0", -275, 170 - WindowHeapSize, 10, 40, System_White, NULL, 0x007FFFFF, System_White, "___", 7, _Align::center, _Align::center, InputField::Type::NaturalNumbers);
+	(*T)["BES"] = new InputField(std::to_string(params_manipulator_globals::begin_evolution_sizes), -275, 170 - WindowHeapSize, 10, 40, System_White, &data::BES, 0x007FFFFF, System_White, "Samples count", 7, _Align::center, _Align::center, InputField::Type::NaturalNumbers);
 	(*T)["2"] = new InputField("0", -225, 190 - WindowHeapSize, 10, 40, System_White, NULL, 0x007FFFFF, System_White, "___", 7, _Align::center, _Align::center, InputField::Type::NaturalNumbers);
 
 
