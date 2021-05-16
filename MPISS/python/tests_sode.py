@@ -21,10 +21,10 @@ def sird(X, t):
 # plotter 
 def plotter(S, J, R, D, Time, file, rare):
     fig, ax = plt.subplots(figsize=(16, 10), dpi=150, facecolor='w', edgecolor='k')
-    #ax.set_yscale('log')
+    ax.set_yscale('log')
     #ax.set_ylim([0,15000])
     #ax.plot(Time, S, '-', color='blue',  linewidth=3, label='Healthy')
-    ax.plot(Time, J, '-', color='red',   linewidth=3, label='Injured')
+    ax.plot(Time, J, '-', color='red',   linewidth=3, label='Ill')
     #ax.plot(Time, 3.*np.exp((1./21)*Time), '--', color='blue',   linewidth=3, label='Test-exp')
     #ax.plot(Time, R, '-', color='green', linewidth=3, label='Recovered')
     #ax.plot(Time, D, '-', color='black', linewidth=3, label='Dead')
@@ -43,7 +43,7 @@ def plotter(S, J, R, D, Time, file, rare):
     ax.fill_between(DAYS, ME - 3*STD, ME + 3*STD, alpha=0.2)
     ax.plot(DAYS, ME, '--', color='red', linewidth=5)
     ax.set_xlabel('Time, in days', fontsize=16)
-    ax.set_ylabel('Injured', fontsize=16)
+    ax.set_ylabel('Ill', fontsize=16)
     ax.set_title('Mean and STD', fontsize=16)
     plt.tick_params(axis='both', which='major', labelsize=14)
     ax.grid(True)

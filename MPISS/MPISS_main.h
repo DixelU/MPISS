@@ -597,11 +597,11 @@ matrix find_closest_sample(
 		}
 #endif
 		unload_params(params, mx);
-		auto ans = t_manip.start_simulation_with_current_parameters(repeats, sample_size, initials);
+		auto sim_result = t_manip.start_simulation_with_current_parameters(repeats, sample_size*(1 + params_manipulator_globals::skip_counter), initials);
 		double sum = 0;
 		for (auto& [sample_type, sample_col] : source_sample) {
-			for (size_t i = 0; i < sample_size; i++) {
-				double difference = ans[i].first[(size_t)sample_type] - sample_col[i];
+			for (size_t i = 0, shifted=0; i < sample_size; i++, shifted += (1 + params_manipulator_globals::skip_counter)) {
+				double difference = sim_result[shifted].first[(size_t)sample_type] - sample_col[i];
 				sum += std::pow(difference * conversion_coeficient, 2);
 			}
 		}
@@ -613,18 +613,24 @@ matrix find_closest_sample(
 		return sum;
 	};
 
+	matrix result = first_approx;
 	switch (method) {
 	case minimization_method::gradient:
-		return params_manipulator::simple_gradient_meth(func, first_approx, false, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
+		result = params_manipulator::simple_gradient_meth(func, first_approx, false, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
+		break;
 	case minimization_method::differential_evolution:
-		return params_manipulator::differential_evolution(func, first_approx, 0.35, 0.15, params_manipulator_globals::begin_evolution_sizes, params_manipulator_globals::desired_range, amd);
+		result = params_manipulator::differential_evolution(func, first_approx, 0.35, 0.15, params_manipulator_globals::begin_evolution_sizes, std::sqrt(params_manipulator_globals::begin_evolution_sizes), amd);
+		break;
 	case minimization_method::extended_annealing:
-		return params_manipulator::extended_annealing(func, first_approx, 0.35, 0.999, 1000, params_manipulator_globals::begin_evolution_sizes, params_manipulator_globals::desired_range, amd);
+		result = params_manipulator::extended_annealing(func, first_approx, 0.35, 0.999, 1000, (params_manipulator_globals::begin_evolution_sizes), params_manipulator_globals::desired_range, amd);
+		break;
 	case minimization_method::newton:
-		return params_manipulator::newton_method(func, first_approx, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
+		result = params_manipulator::newton_method(func, first_approx, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
+		break;
 	}
+	printf("Function call count: %i\n", function_call_counter);
 	return
-		first_approx;
+		result;
 }
 
 struct comma final : std::numpunct<char> {
@@ -662,13 +668,11 @@ matrix SimpleExample(access_method_data* amd, minimization_method method) {
 	int counter = 0;
 	auto func = [&](const matrix& v)->double {
 		auto innerfunc = [](double& v, size_t y, size_t x)->void {
-			v = (v - (y + 1)/80.);
-			if (!y)
-				v *= 4;
+			v = std::pow(std::sin(y * v - (y + 1) / 80.), 2.) + 0.01*y*v;
 		};
 		auto mat = v;
 		mat.selfapply_indexed(innerfunc);
-		auto val = std::pow(std::sin(mat.norma(0.45) / 80.),2.) + mat.norma(1)*0.001;
+		auto val = (mat.norma(0.45) / 80.) + mat.norma(1)*0.01 + mpiss::erand()*0.0;
 		counter++;
 		return val;
 	};
@@ -714,18 +718,28 @@ matrix SimpleExample(access_method_data* amd, minimization_method method) {
 		{0.1458},
 		{0.35},
 		{0.1458},
+		{0.35},
+		{0.1458},
 	};
+	begin.selfapply([](double& v) {v = mpiss::erand(); });
+
+	matrix result = begin;
 	switch (method) {
 	case minimization_method::gradient:
-		return params_manipulator::simple_gradient_meth(func, begin, false, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
+		result = params_manipulator::simple_gradient_meth(func, begin, false, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
+		break;
 	case minimization_method::differential_evolution:
-		return params_manipulator::differential_evolution(func, begin, 0.35, 0.15, params_manipulator_globals::begin_evolution_sizes, params_manipulator_globals::desired_range, amd);
+		result = params_manipulator::differential_evolution(func, begin, 0.35, 0.15, params_manipulator_globals::begin_evolution_sizes, params_manipulator_globals::desired_range, amd);
+		break;
 	case minimization_method::extended_annealing:
-		return params_manipulator::extended_annealing(func, begin, 0.35, 0.999, 10, params_manipulator_globals::begin_evolution_sizes, params_manipulator_globals::desired_range, amd);
+		result = params_manipulator::extended_annealing(func, begin, 0.35, 0.999, 10, params_manipulator_globals::begin_evolution_sizes, params_manipulator_globals::desired_range, amd);
+		break;
 	case minimization_method::newton:
-		return params_manipulator::newton_method(func, begin, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
+		result = params_manipulator::newton_method(func, begin, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
+		break;
 	}
-	return begin;
+	printf("Function call count: %i\n", counter);
+	return result;
 }
 
 int StartSimulationProcess(access_method_data* amd, minimization_method method, size_t reps, size_t initials, size_t iters = 0) {
@@ -774,7 +788,11 @@ int StartSimulationProcess(access_method_data* amd, minimization_method method, 
 	std::vector<std::pair<point<mpiss::state_enum_size>, point<mpiss::state_enum_size>>> result;
 
 #ifdef IS_SAMPLE_CONSTRUCTION_BUILD
+	auto now = std::chrono::system_clock::now();
 	result = t_manip.start_simulation_with_current_parameters(reps, iters, initials);
+	auto val = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - now).count();
+
+	std::cout << "Elapses time: " << val << "mcs" << std::endl;
 
 	std::ofstream fout("output.csv");
 

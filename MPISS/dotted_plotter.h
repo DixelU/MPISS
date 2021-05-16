@@ -184,7 +184,7 @@ struct DottedPlotter : HandleableUIPart {
 		double i_y_lb = std::floor((internal_center_y - 0.5 * internal_height) / rounded_height) * rounded_height;
 
 		glBegin(GL_LINES);
-		GLCOLOR(((lines_color & 0xFFFFFF00) | ((lines_color & 0xFF) >> 1)));
+		GLCOLOR(((lines_color & 0xFFFFFF00) | ((lines_color & 0xFF) >> 0) ));
 		for (int i = 0; i < grid_rel_depth*2; i++) {
 
 			double x1 = i * rounded_width + i_x_lb;
@@ -338,7 +338,10 @@ struct DottedPlotter : HandleableUIPart {
 
 			if (Button == -1 && amd && amd->is_alive) {
 				amd->locker.lock();
-				matrix copy = amd->get_param_callback(closest_to_pointer_param);
+				matrix copy;
+				if (closest_to_pointer_param < amd->size_callback()) {
+					copy = amd->get_param_callback(closest_to_pointer_param);
+				}
 				amd->locker.unlock();
 				on_click(copy);
 				return 1;

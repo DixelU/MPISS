@@ -26,7 +26,7 @@ struct WindowsHandler {
 		MoveableWindow* ptr;
 		Map["ALERT"] = ptr = new MoveableWindow("Alert window", System_White, -100, alertheight / 2, 200, alertheight, 0x3F3F3FCF, 0x7F7F7F7F);
 		(*ptr)["AlertText"] = new TextBox("_", System_White, 20, alerttext_vert_pos, alertheight - 12.5, 155, 7.5, 0, 0, 0, _Align::left, TextBox::VerticalOverflow::recalibrate);
-		(*ptr)["AlertSign"] = new SpecialSignHandler(SpecialSigns::DrawACircle, -78.5, -17, 12, 0x000000FF, 0x001FFFFF);
+		(*ptr)["AlertSign"] = new SpecialSignHandler(SpecialSigns::DrawACircle, -78.5, -17, 12, 0x00000000, 0x00FFFFFF);
 
 		Map["PROMPT"] = ptr = new MoveableWindow("prompt", System_White, -50, 50, 100, 100, 0x3F3F3FCF, 0x7F7F7F7F);
 		(*ptr)["FLD"] = new InputField("", 0, 35 - WindowHeapSize, 10, 80, System_White, NULL, 0x007FFFFF, NULL, "", 0, _Align::center);

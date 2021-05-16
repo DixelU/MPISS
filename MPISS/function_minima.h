@@ -11,6 +11,7 @@
 namespace params_manipulator_globals {
 	double desired_range = 1e-8;
 	int begin_evolution_sizes = 200;
+	int skip_counter = 0;
 };
 
 struct params_manipulator {
@@ -201,16 +202,28 @@ struct params_manipulator {
 
 			if (amd) {
 				amd->locker.lock();
-				constexpr size_t maximum = 200;
+				size_t maximum = params_manipulator_globals::begin_evolution_sizes;
 				if (buffer.size() == maximum) {
 					size_t max_idx = 0;
 					for (size_t i = 0; i < maximum; i++) {
 						if (buffer[max_idx].second < buffer[i].second)
 							max_idx = i;
 					}
-					buffer.erase(buffer.begin() + max_idx);
+					if (buffer[max_idx].second < func_minima) {
+						size_t rnd1 = mpiss::erand() * buffer.size();
+						size_t rnd2 = mpiss::erand() * buffer.size();
+						double a = mpiss::erand();
+						auto new_point = buffer[rnd1].first * a + (1 - a) * buffer[rnd2].first;
+						next_step = new_point - begin;
+						begin = new_point;
+					}
+					else {
+						buffer.erase(buffer.begin() + max_idx);
+						buffer.push_back({ begin, func_minima });
+					}
 				}
-				buffer.push_back({ begin, func_minima });
+				else
+					buffer.push_back({ begin, func_minima });
 				amd->locker.unlock();
 			}
 
@@ -262,20 +275,33 @@ struct params_manipulator {
 			if (!is_not_degenerated)
 				break;
 
-			begin = begin + new_direction.value();
+			auto next_step = new_direction.value();
+			begin = begin + next_step;
 
 			if (amd) {
 				amd->locker.lock();
-				constexpr size_t maximum = 200;
+				size_t maximum = params_manipulator_globals::begin_evolution_sizes;
 				if (buffer.size() == maximum) {
 					size_t max_idx = 0;
 					for (size_t i = 0; i < maximum; i++) {
 						if (buffer[max_idx].second < buffer[i].second)
 							max_idx = i;
 					}
-					buffer.erase(buffer.begin() + max_idx);
+					if (buffer[max_idx].second < f) {
+						size_t rnd1 = mpiss::erand() * buffer.size();
+						size_t rnd2 = mpiss::erand() * buffer.size();
+						double a = mpiss::erand();
+						auto new_point = buffer[rnd1].first * a + (1 - a) * buffer[rnd2].first;
+						next_step = new_point - begin;
+						begin = new_point;
+					}
+					else {
+						buffer.erase(buffer.begin() + max_idx);
+						buffer.push_back({ begin, f });
+					}
 				}
-				buffer.push_back({ begin, f });
+				else
+					buffer.push_back({ begin, f });
 				amd->locker.unlock();
 			}
 

@@ -22,6 +22,7 @@
 
 namespace data {
 	std::string ITERS = "1000", REPS = "10", INITIALS = "1", BES = std::to_string(params_manipulator_globals::begin_evolution_sizes);
+	std::string SKIP_COUNT = "0";
 	static pooled_thread th;
 }
 
@@ -35,6 +36,7 @@ void Start() {
 		auto INITIALS = (InputField*)(*SettingsWindow)["INITIALS"];
 		auto METHOD = (SelectablePropertedList*)(*SettingsWindow)["METHOD"];
 
+		params_manipulator_globals::skip_counter = std::stoi(data::SKIP_COUNT);
 		params_manipulator_globals::begin_evolution_sizes = std::stoi(data::BES);
 		
 		auto method = magic_enum::enum_cast<minimization_method>(METHOD->SelectorsText[METHOD->CurrentTopLineID]);
@@ -124,7 +126,7 @@ void Init() {
 
 
 	(*T)["BES"] = new InputField(std::to_string(params_manipulator_globals::begin_evolution_sizes), -275, 170 - WindowHeapSize, 10, 40, System_White, &data::BES, 0x007FFFFF, System_White, "Samples count", 7, _Align::center, _Align::center, InputField::Type::NaturalNumbers);
-	(*T)["2"] = new InputField("0", -225, 190 - WindowHeapSize, 10, 40, System_White, NULL, 0x007FFFFF, System_White, "___", 7, _Align::center, _Align::center, InputField::Type::NaturalNumbers);
+	(*T)["SKIP_COUNT"] = new InputField(data::SKIP_COUNT, -225, 190 - WindowHeapSize, 10, 40, System_White, &data::SKIP_COUNT, 0x007FFFFF, System_White, "iters to skip", 7, _Align::center, _Align::right, InputField::Type::NaturalNumbers);
 
 
 	(*T)["MATRIX_EXPLORER"] = new MatrixExplorer(-345, 140 - WindowHeapSize, 5, 1, 0x00007F7F, 0xFFFFFFFF, 0x1F1F1FFF,

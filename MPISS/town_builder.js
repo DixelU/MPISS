@@ -58,7 +58,7 @@ function generateTown(nk,nt,nm,no,hc,tc,wc,mc,sc,trackregenscnt,daylength){
 			let closest_magazine = (mc*Math.random())>>>0;
 			let house = (hc*Math.random())>>>0;
 			if(k>1)
-				lockdown_track = `H:${house}:${rel_time}; M:${closest_magazine}:1; H:${house}:${lokdown_loop_length-1-rel_time}`;
+				lockdown_track = `H:${house}:${rel_time}; M:${closest_magazine}:1; H:${house}:${lokdown_loop_length-1-rel_time};`;
 			let home_time = conv_time(8 + randn_bm()*1.5);
 			let time_left = conv_time(24) - home_time;
 			let external_fixed_rnd = Math.random();
@@ -81,7 +81,7 @@ function generateTown(nk,nt,nm,no,hc,tc,wc,mc,sc,trackregenscnt,daylength){
 					track+=loc_str+"; ";
 				}
 				if(last_transp!="")
-					track += last_transp;
+					track += last_transp+`; `;
 				track += `H:${house}:${time_left}; `
 			}
 			obj = {};
