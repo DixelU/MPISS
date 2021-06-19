@@ -619,7 +619,7 @@ matrix find_closest_sample(
 		result = params_manipulator::simple_gradient_meth(func, first_approx, false, epsilon_norma_comparator, params_manipulator_globals::desired_range, amd);
 		break;
 	case minimization_method::differential_evolution:
-		result = params_manipulator::differential_evolution(func, first_approx, 0.35, 0.15, params_manipulator_globals::begin_evolution_sizes, std::sqrt(params_manipulator_globals::begin_evolution_sizes), amd);
+		result = params_manipulator::differential_evolution(func, first_approx, 0.000035, 0.15, params_manipulator_globals::begin_evolution_sizes, std::sqrt(params_manipulator_globals::desired_range), amd);
 		break;
 	case minimization_method::extended_annealing:
 		result = params_manipulator::extended_annealing(func, first_approx, 0.35, 0.999, 1000, (params_manipulator_globals::begin_evolution_sizes), params_manipulator_globals::desired_range, amd);
@@ -667,12 +667,23 @@ std::map<mpiss::disease_state, std::vector<double>> get_sample(const std::wstrin
 matrix SimpleExample(access_method_data* amd, minimization_method method) {
 	int counter = 0;
 	auto func = [&](const matrix& v)->double {
+		/*static matrix idk = { {0.01},{0.001 },{0.07},{0.0008 },{0.007},{0.0005 },{0.0001 },{0.04},{0.01 },{0.09},{0.0001 },{0.005},{0.0001 },{0.001 },{0.04},{0.01 },{0.09},{0.0001 },{0.005},{0.0001 },{0.0 },{0.09},{0.02 },{0.1},{0.0002 },{0.009},{0.0001 },{0.001 },{0.00 },{0.01 },{0.2 },{0.4 },{0.1 },{0.001},{0.15 },{0.25 },{0.015 },{0.020 },{0.010},{0.095} };
+		auto mat = v - idk;
+		for (uint8_t i = 0; i < 10; i++) {
+			for (uint8_t y = 0; y < 40; y++) {
+				mat.at(0, y) += mat.at(0, (y + i) % 40) * 0.059 * mpiss::nrand();
+			}
+		}
+		auto norm = mat.norma(0.45);
+		auto val = (std::pow(std::sin(norm * 100),2.) * norm + norm*0.17)*0.1 + mat.norma(4)*0.1 + 9.146554 + mpiss::erand()*0.05;
+		val += (mat.at(0, 36) * mat.at(0, 15) * mat.at(0, 16) * mat.at(0, 17) * mat.at(0, 18) * mat.at(0, 38)) * 0.1;
+		val += (std::pow(sin(val * 25.), 20.) * val + val) * 0.0025;*/
 		auto innerfunc = [](double& v, size_t y, size_t x)->void {
-			v = std::pow(std::sin(y * v - (y + 1) / 80.), 2.) + 0.01*y*v;
+			v = std::pow(std::sin(y * v - (y + 1) / 80.), 2.) + 0.01 * y * v;
 		};
 		auto mat = v;
 		mat.selfapply_indexed(innerfunc);
-		auto val = (mat.norma(0.45) / 80.) + mat.norma(1)*0.01 + mpiss::erand()*0.0;
+		auto val = (mat.norma(0.45) / 80.) + mat.norma(1) * 0.01 + mpiss::erand() * 0.5;
 		counter++;
 		return val;
 	};
@@ -691,35 +702,7 @@ matrix SimpleExample(access_method_data* amd, minimization_method method) {
 		{0.17},
 		{0.1},
 		{0.35},
-		{0.1458},
-		{0.1},
-		{0.2},
-		{0.17},
-		{0.1},
-		{0.35},
-		{0.1458},
-		{0.5},
-		{0.5},
-		{0.5},
-		{0.1},
-		{0.35},
-		{0.1458},
-		{0.1},
-		{0.2},
-		{0.17},
-		{0.1},
-		{0.35},
-		{0.1458},
-		{0.1},
-		{0.2},
-		{0.17},
-		{0.1},
-		{0.35},
-		{0.1458},
-		{0.35},
-		{0.1458},
-		{0.35},
-		{0.1458},
+		{0.1458}
 	};
 	begin.selfapply([](double& v) {v = mpiss::erand(); });
 

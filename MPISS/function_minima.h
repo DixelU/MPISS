@@ -229,7 +229,7 @@ struct params_manipulator {
 
 			if (norma_comparator(epsilon, next_step.norma(2)))
 				break;
-
+			
 			std::cout << "Step norma: " << next_step.norma(1) << std::endl;
 			//if ((prev - begin).norma(1) < epsilon)
 				//break;
@@ -367,6 +367,8 @@ struct params_manipulator {
 
 		double min, max;
 		size_t min_id, max_id;
+
+		uint32_t cnt = 0;
 		do {
 			min = 1e127, max = -1e127;
 			min_id = 0, max_id = 0;
@@ -387,15 +389,17 @@ struct params_manipulator {
 					min_id = i;
 					min = new_value;
 				}
-				else if (new_value > max) {
+				if (new_value > max) {
 					max_id = i;
 					max = new_value;
 				}
 			}
-			//printf("Range: %lf\n", max - min);
+			if((cnt)%16 == 0)
+				printf("Range: %lf\n", max - min);
+			cnt++;
 			//printf("New minima: %lf\n", min);
 			//std::cout << std::endl << entries[min_id] << std::endl;
-		} while (max - min > epsilon);
+		} while (std::abs(max - min) > epsilon);
 		std::cout << std::endl << entries[min_id] << std::endl;
 		return entries[min_id];
 	}
