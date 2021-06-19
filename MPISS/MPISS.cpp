@@ -12,7 +12,7 @@
 #include <thread>
 #include <locale>
 
-//#define IS_SAMPLE_CONSTRUCTION_BUILD
+#define IS_SAMPLE_CONSTRUCTION_BUILD
 
 #include "SAFGUIF/SAFGUIF.h"
 #include "dotted_plotter.h"
